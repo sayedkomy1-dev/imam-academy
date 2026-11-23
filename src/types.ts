@@ -1,0 +1,1179 @@
+// src/types.ts - Unified Interfaces for Imam Quran Academy (Zero Build Errors)
+
+export type UserRole =
+  | 'owner'
+  | 'supervisor'
+  | 'teacher'
+  | 'financial'
+  | 'student'
+  | 'guardian'
+  | 'guest';
+
+export type ActiveRoleMode = 'owner_mode' | 'supervisor_mode' | 'teacher_mode';
+
+export type PortalRoute =
+  | 'student'
+  | 'guardian'
+  | 'owner'
+  | 'general'
+  | 'almushaf'
+  | 'sadaqa';
+
+export type AccountStatus = 'pending' | 'active' | 'suspended' | 'rejected';
+
+export interface StaffPermissions {
+  canManageOwnCirclesOnly: boolean;
+  canViewAllCircles: boolean;
+  canAccessFinance: boolean;
+  canCreateCompetitions: boolean;
+  canEditDeleteStudents: boolean;
+  canExportBackups: boolean;
+  canApproveTeachers: boolean;
+}
+
+export interface StaffUser {
+  id: string;
+  uid?: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: 'owner' | 'supervisor' | 'teacher' | 'financial';
+  status: AccountStatus;
+  specialization?: string;
+  assignedCircleIds: string[];
+  permissions: StaffPermissions;
+  createdAt: string;
+  lastActiveAt?: string;
+  provider?: 'google' | 'microsoft' | 'email';
+}
+
+export interface AccessCodeRequest {
+  id: string;
+  studentName: string;
+  guardianName?: string;
+  guardianPhone: string;
+  circleOrTeacherName?: string;
+  portalType?: 'guardian' | 'student';
+  status: 'pending' | 'resolved';
+  matchedStudentId?: string;
+  matchedStudentName?: string;
+  matchedStudentCode?: string;
+  generatedCode?: string;
+  matchedStudentPin?: string;
+  matchedTeacherName?: string;
+  matchedCircleName?: string;
+  createdAt: string;
+  resolvedAt?: string;
+}
+
+export interface Circle {
+  id: string;
+  name: string;
+  teacherId: string;
+  teacherName: string;
+  schedule: string;
+  level: string;
+  studentCount?: number;
+  meetingLink?: string;
+}
+
+export interface SessionError {
+  id: string;
+  word: string;
+  ayahNumber: number;
+  surahName: string;
+  type: 'memorization' | 'tajweed' | 'hesitation' | 'tashkeel';
+  note?: string;
+  timestampSec?: number;
+}
+
+export interface RecitationSession {
+  id: string;
+  studentId: string;
+  studentName: string;
+  teacherId?: string;
+  date: string;
+  newMemSurah: string;
+  newMemFromAyah: number;
+  newMemToAyah: number;
+  newMemScore: number;
+  nearRevSurah?: string;
+  nearRevScore?: number;
+  farRevJuz?: string;
+  farRevScore?: number;
+  tajweedScore: number;
+  overallScore: number;
+  attendance: 'present' | 'absent' | 'excused' | 'late';
+  errors: SessionError[];
+  teacherNote?: string;
+  audioRecordingUrl?: string;
+  sentViaWhatsApp?: boolean;
+}
+
+export interface CompetitionParticipant {
+  studentId: string;
+  studentName: string;
+  circleName?: string;
+  score: number;
+  speedSeconds: number;
+  rank?: number;
+  completedAt: string;
+}
+
+export interface Competition {
+  id: string;
+  title: string;
+  surahOrJuz: string;
+  createdBy: string;
+  isActive: boolean;
+  createdAt: string;
+  participants: CompetitionParticipant[];
+}
+
+export interface SadaqahWaqfCard {
+  id: string;
+  deceasedOrBeneficiaryName: string;
+  donorName?: string;
+  duaText: string;
+  amenCount: number;
+  pagesReadCount: number;
+  createdAt: string;
+}
+
+export interface AcademyBrandConfig {
+  academyName: string;
+  slogan: string;
+  developerName: string;
+  developerTitle: string;
+  whatsappNumber: string;
+  whatsappClean: string;
+  ownerEmails: string[];
+  domainUrl: string;
+}
+
+export type StudentLevel = 'مبتدئ' | 'متوسط' | 'متقدم';
+
+export type FoundationLevelNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+
+export type FiveFortressTaskKey =
+  | 'listened3Times'
+  | 'readPreparation'
+  | 'reviewedLink'
+  | 'reviewedFar';
+
+export type StudentPlan =
+  | 'متوازنة'
+  | 'مكثفة'
+  | 'مراجعة فقط'
+  | 'تثبيت'
+  | 'قصار السور';
+
+export type LinkLogic = 'آخر آية' | 'الآية التالية';
+
+export type AttendanceStatus = 'حضر' | 'غاب' | 'إجازة';
+
+export type ErrorType =
+  | 'حفظ'
+  | 'تردد'
+  | 'تلقين'
+  | 'تجويد'
+  | 'تشكيل'
+  | 'نسيان آية';
+
+export type ErrorContext =
+  | 'التسميع'
+  | 'الحفظ الجديد'
+  | 'المراجعة القريبة'
+  | 'المراجعة البعيدة'
+  | 'الأجزاء';
+
+export type GradeType = 'ممتاز' | 'جيد جداً' | 'جيد' | 'ضعيف' | 'إعادة';
+
+export type ReciterId =
+  | 'Husary_128kbps'
+  | 'Husary_Muallim_128kbps'
+  | 'Ayman_Sowaid_64kbps'
+  | 'Minshawy_Murattal_128kbps'
+  | 'Minshawy_Teacher_128kbps'
+  | 'Abdul_Basit_Murattal_192kbps'
+  | 'Alafasy_128kbps'
+  | 'MaherAlMuaiqly128kbps'
+  | 'Hudhaify_128kbps'
+  | 'Mohamed_Jibreel_128kbps'
+  | 'sufi';
+
+export type StudentAccountStatus = 'نشط' | 'متوقف' | 'مؤرشف';
+
+export type ErrorCategoryGroup = 'حفظ' | 'حروف' | 'ضبط' | 'تجويد' | 'تشكيل';
+
+export type ErrorFollowUpStatus =
+  | 'open'
+  | 'mastered'
+  | 'needs_review'
+  | 'needs_practice'
+  | 'repeated'
+  | 'repeated_error'
+  | 'تم الإتقان';
+
+export type SessionSyncStatus =
+  | 'مسودة محلية'
+  | 'حصة محفوظة'
+  | 'تمت المزامنة'
+  | 'منشور ببوابة ولي الأمر'
+  | 'تم فتح محادثة واتساب للمراجعة'
+  | 'تم الإرسال لولي الأمر';
+
+export type ErrorHotspotStageKey =
+  | 'memorization_1' // 🔴 خطأ حفظ / نسيان (-1.0)
+  | 'tashkeel_05'    // 🟠 خطأ تشكيل / إعراب (-0.5)
+  | 'tajweed_05'     // 🟣 خطأ حكم تجويدي (-0.5)
+  | 'hesitation_025'; // 🟡 تردد / تنبيه فتح (-0.25)
+
+export interface RecitationError {
+  id: string;
+  type: ErrorType;
+  errorType?: string;
+  context: ErrorContext;
+  surahId?: number;
+  surah?: string;
+  surahName?: string;
+  ayah?: number;
+  ayahNumber?: number;
+  word?: string;
+  wordIndex?: number;
+  letter?: string;
+  category?: ErrorCategoryGroup;
+  subType?: string;
+  note?: string;
+  deductionPoints?: number; // 1 | 0.5 | 0.25
+  hotspotStageKey?: ErrorHotspotStageKey;
+  tajweedRule?: string;
+  tajweedExplanation?: string;
+  tajweedLetters?: string;
+  tajweedExample?: string;
+  tajweedPracticeTip?: string;
+  correctedInSession?: boolean;
+  followUpStatus?: ErrorFollowUpStatus;
+  repeatCount?: number;
+  compositeKey?: string;
+  lastReviewedDate?: string;
+  timestamp: string;
+}
+
+export interface MakeupSessionCard {
+  id: string;
+  studentId: string;
+  studentName: string;
+  absentDate: string;
+  attendanceStatus: 'غاب' | 'إجازة';
+  missedSurahId?: number;
+  missedSurahName: string;
+  missedFromAyah: number;
+  missedToAyah: number;
+  missedReviewLabel?: string;
+  resolutionStatus: 'pending' | 'scheduled_makeup' | 'merged_next_week' | 'completed';
+  scheduledMakeupDate?: string;
+  scheduledMakeupTime?: string;
+  mergedPlanNote?: string;
+  resolvedByRole?: 'teacher' | 'guardian';
+  resolvedAt?: string;
+  createdAt: string;
+}
+
+export type RecitationAxisKey =
+  | 'actualRecitation'
+  | 'newMemorization'
+  | 'nearReview'
+  | 'farReview'
+  | 'juzAndSurahReview'
+  | 'extraRecitation';
+
+export interface StudentRecitationAudioClip {
+  id: string;
+  studentId: string;
+  studentName?: string;
+  sessionDate: string;
+  axisKey: RecitationAxisKey;
+  axisLabel: string;
+  surahName: string;
+  fromAyah?: number;
+  toAyah?: number;
+  audioUrl: string;
+  durationSeconds: number;
+  grade?: GradeType;
+  percentage?: number;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface SurahRangeAssignment {
+  enabled: boolean;
+  surahId: number;
+  surahName: string;
+  toSurahId?: number;
+  toSurahName?: string;
+  isFullSurah: boolean;
+  fromAyah: number;
+  toAyah: number;
+  direction: 'asc' | 'desc';
+  grade?: GradeType;
+  percentage?: number;
+  recordedAudioUrl?: string;
+  recordedAudioDurationSec?: number;
+  recordedAt?: string;
+}
+
+export interface JuzAssignmentItem {
+  id: string;
+  juzNumber: number;
+  juzName: string;
+  scope: 'full' | 'hizb1' | 'hizb2' | 'q1' | 'q2' | 'q3' | 'q4' | 'q5' | 'q6' | 'q7' | 'q8';
+  label: string;
+  grade?: GradeType;
+  percentage?: number;
+  recordedAudioUrl?: string;
+  recordedAudioDurationSec?: number;
+}
+
+export interface SessionRecord {
+  id: string;
+  studentId: string;
+  date: string; // YYYY-MM-DD
+  status: AttendanceStatus;
+  masteryScore: number; // 0-100
+  grade?: number | GradeType;
+  previousEvaluation: {
+    newGrade?: GradeType;
+    nearGrade?: GradeType;
+    farGrade?: GradeType;
+    juzGrade?: GradeType;
+    surahGrade?: GradeType;
+    hizbGrade?: GradeType;
+    actualGrade?: GradeType;
+  };
+  sectionPercentages?: {
+    actual?: number;
+    newMem?: number;
+    nearRev?: number;
+    farRev?: number;
+    juzRev?: number;
+    hizbRev?: number;
+    surahRev?: number;
+    actualRecitation?: number;
+    previousEvaluation?: number;
+    newMemorization?: number;
+    nearReview?: number;
+    farReview?: number;
+    surahReview?: number;
+    juzReview?: number;
+    hizbQuarterReview?: number;
+    extraRecitation?: number;
+  };
+  actualRecitation?: SurahRangeAssignment & {
+    stopAyah?: number;
+    completedStatus?: 'كامل' | 'جزئي' | 'إضافي';
+    notes?: string;
+  };
+  extraRecitation?: SurahRangeAssignment & {
+    notes?: string;
+  };
+  errors: RecitationError[];
+  newMemorization?: SurahRangeAssignment;
+  nearReview?: SurahRangeAssignment;
+  farReview?: SurahRangeAssignment;
+  juzReview: {
+    enabled: boolean;
+    items: JuzAssignmentItem[];
+    direction: 'asc' | 'desc';
+    recordedAudioUrl?: string;
+    recordedAudioDurationSec?: number;
+  };
+  hizbQuarterReview?: {
+    enabled: boolean;
+    mode?: 'juz_quarters' | 'hizb_quarters';
+    items: JuzAssignmentItem[];
+    direction: 'asc' | 'desc';
+    grade?: GradeType;
+    percentage?: number;
+    recordedAudioUrl?: string;
+    recordedAudioDurationSec?: number;
+  };
+  surahReview: {
+    enabled: boolean;
+    surahNames: string[];
+    direction: 'asc' | 'desc';
+    recordedAudioUrl?: string;
+    recordedAudioDurationSec?: number;
+  };
+  recitationAudioClips?: StudentRecitationAudioClip[];
+  parentNotes: string;
+  tarbiyahCardId?: string;
+  tarbiyahCardTitle?: string;
+  tarbiyahCardSummary?: string;
+  voiceNoteDataUrl?: string;
+  voiceNoteDuration?: number;
+  teacherVoiceNotes?: TeacherRecitationVoiceNote[];
+  memorizationAudioDataUrl?: string;
+  memorizationAudioName?: string;
+  audioEvaluationScore?: number;
+  audioEvaluationGrade?: GradeType;
+  tajweedScore?: number;
+  lahnJaliScore?: number;
+  recitationHealthScore?: number;
+  autoWhatsAppSent?: boolean;
+  autoWhatsAppSentAt?: string;
+  whatsappSummaryText?: string;
+  syncStatus?: SessionSyncStatus;
+  durationMinutes?: number;
+  carriedOverFromDate?: string;
+  // v11.12.1 Review 2 & 4: Structured Absence & Makeup Session Tracking
+  absencePlan?: {
+    excused: boolean;
+    excuseNote: string;
+    arrangement: 'none' | 'postponed_assignment' | 'planned_makeup';
+    plannedDate: string;
+    updatedAt: string;
+  };
+  makeupMeta?: {
+    absenceSessionId: string;
+    absenceDate: string;
+    linkedAt: string;
+  };
+  createdAt: string;
+}
+
+export interface LateSessionAlertRecord {
+  id: string;
+  studentId: string;
+  studentName: string;
+  circleName: string;
+  scheduledTime: string;
+  date: string; // YYYY-MM-DD
+  minutesLate: number;
+  stage: 'late_5m' | 'late_15m';
+  status: 'active' | 'resolved';
+  surahName: string;
+  ayahNumber: number;
+  guardianPhone?: string;
+  meetingUrl?: string;
+  ownerUid?: string;
+  missingLogin?: boolean;
+  missingRecitation?: boolean;
+  notifiedAt: string;
+}
+
+export interface RecitationEngineStatusRecord {
+  id: string;
+  ownerUid?: string;
+  circleId: string;
+  circleName: string;
+  teacherName: string;
+  teacherEmail?: string;
+  scheduledTime: string;
+  date: string; // YYYY-MM-DD
+  engineState: 'not_started' | 'started' | 'completed';
+  activeStudentId?: string;
+  minutesSinceStart?: number;
+  studentsCount?: number;
+  notifiedAt?: string;
+}
+
+export type VoiceNoteEvaluationRating =
+  | 'متميز'
+  | 'جيد جداً'
+  | 'جيد'
+  | 'ضعيف'
+  | 'يحتاج مراجعة';
+
+export interface TeacherRecitationVoiceNote {
+  id: string;
+  studentId: string;
+  studentName: string;
+  sessionDate: string;
+  context: ErrorContext;
+  surahName: string;
+  ayahNumber?: number;
+  linkedSubmissionId?: string;
+  timestampSec?: number;
+  category: 'تجويد' | 'حفظ' | 'تشكيل' | 'مخارج' | 'توجيه عام';
+  evaluationRating?: VoiceNoteEvaluationRating;
+  title: string;
+  audioDataUrl: string;
+  durationSeconds: number;
+  rawSpeechTranscript?: string;
+  aiTranscript?: string;
+  aiEvaluativeText?: string;
+  aiParentSummary?: string;
+  aiStrengths?: string[];
+  aiImprovementPlan?: string;
+  aiSuggestedGrade?: GradeType;
+  aiSuggestedScore?: number;
+  aiConvertedAt?: string;
+  appliedToSessionNotes?: boolean;
+  createdAt: string;
+}
+
+export interface StudentCustomMutashabih {
+  id: string;
+  createdAt: string;
+  surahAName: string;
+  ayahANumber: number;
+  ayahAText: string;
+  surahBName: string;
+  ayahBNumber: number;
+  ayahBText: string;
+  diffHighlightWord: string;
+  dabitRule: string;
+  mastered?: boolean;
+  // Optional compatibility aliases
+  primarySurahId?: number;
+  primarySurahName?: string;
+  primaryAyah?: number;
+  primaryText?: string;
+  similarSurahId?: number;
+  similarSurahName?: string;
+  similarAyah?: number;
+  similarText?: string;
+  differenceWord1?: string;
+  differenceWord2?: string;
+  ruleNote?: string;
+}
+
+export type QuranRiwayah =
+  | 'حفص عن عاصم'
+  | 'ورش عن نافع'
+  | 'قالون عن نافع'
+  | 'شعبة عن عاصم'
+  | 'الدوري عن أبي عمرو';
+
+export type StudentAccessibilityMode = 'standard' | 'kids' | 'seniors';
+
+export type SeasonalModeType =
+  | 'normal'
+  | 'ramadan'
+  | 'summer_intensive'
+  | 'khatmah_camp'
+  | 'mutashabihat_camp'
+  | 'عادي'
+  | 'ختمة رمضان'
+  | 'مكثف الصيف'
+  | 'مراجعة عشر ذي الحجة'
+  | 'معسكر تثبيت';
+
+export interface TimestampAudioFeedbackPin {
+  id: string;
+  timestampSec: number; // e.g., 14 for 00:14
+  second?: number; // compatibility alias
+  formattedTime: string; // "00:14"
+  category: 'تجويد' | 'حفظ' | 'تشكيل' | 'مخارج' | 'وقف وابتداء' | 'تشجيع';
+  ayahNumber?: number;
+  word?: string;
+  comment: string;
+  note?: string; // compatibility alias
+  linkedErrorId?: string;
+  linkedErrorType?: ErrorType;
+  teacherVoiceNoteDataUrl?: string;
+  teacherVoiceNoteDurationSec?: number;
+  createdAt: string;
+}
+
+export interface AdmissionRequest {
+  id: string;
+  studentName: string;
+  age: number;
+  guardianName: string;
+  whatsappPhone: string;
+  guardianPhone?: string;
+  countryAndTimezone: string;
+  countryOrTimezone?: string;
+  preferredRiwayah: QuranRiwayah;
+  requestedRiwayah?: QuranRiwayah;
+  currentLevel: StudentLevel | string;
+  memorizedPartsSummary: string;
+  preferredDaysAndTime: string;
+  preferredDays?: string;
+  preferredTime?: string;
+  status: 'جديد' | 'تم تحديد المستوى' | 'تم تحديد الموعد' | 'مقبول بالحلقة' | 'تم القبول' | 'مؤجل';
+  createdAt: string;
+  notes?: string;
+  fatihaAudioDataUrl?: string;
+  fatihaAudioDurationSec?: number;
+  assignedCircleName?: string;
+}
+
+export interface OwnerAuditLogItem {
+  id: string;
+  timestamp: string;
+  actorName: string;
+  actor?: string;
+  actorRole: 'المالك / المشرف' | 'المعلم' | 'النظام';
+  actionCategory:
+    | 'تعديل طالب'
+    | 'تعديل بيانات طالب'
+    | 'أرشفة وحالة ملف'
+    | 'أرشفة أو حالة حساب'
+    | 'دفعة مالية وإيصال'
+    | 'سداد رسوم مالية'
+    | 'شهادة وإجازة'
+    | 'إصدار شهادة أو إجازة'
+    | 'قبول طالب جديد'
+    | 'إعدادات وحلقات'
+    | 'إعدادات عامة'
+    | 'صلاحيات وأمان';
+  category?: string;
+  summary: string;
+  details?: string;
+  targetName?: string;
+}
+
+export const MASTER_OWNER_EMAILS = [
+  'sayedkomy1@gmail.com',
+  'sayedkomy2@gmail.com',
+] as const;
+
+export type StaffHierarchyRole =
+  | 'owner'
+  | 'supervisor'
+  | 'teacher'
+  | 'financial_manager';
+
+export type StaffAuthProvider = 'google' | 'microsoft' | 'pin';
+
+export interface CustomFirebaseConfigInput {
+  apiKey: string;
+  authDomain: string;
+  projectId: string;
+  appId: string;
+  firestoreDatabaseId?: string;
+}
+
+export type StudentPrivacyPreference = 'standard' | 'limited' | 'private';
+
+export interface SupervisorPermissions {
+  canViewAllTeachersStudents: boolean;
+  canAccessAndExportBackups: boolean;
+  canManageTeachers: boolean;
+  canManageStudentsAndAdmissions: boolean;
+  canViewFinancialRecords: boolean;
+  canViewSensitiveStudentContact: boolean;
+}
+
+export interface TeacherPermissions {
+  canAddAndEditStudents: boolean;
+  canExportTeacherJsonBackup: boolean;
+  canImportTeacherJsonBackup: boolean;
+  canCreateAndEditCircles: boolean;
+  canIssueExamsAndCertificates: boolean;
+  canManageStudentFees: boolean;
+  canApproveAdmissionRequests: boolean;
+  // Granular RBAC Matrix Switches
+  restrictToAssignedCircles?: boolean;
+  canAccessFinanceSection?: boolean;
+  canManageCompetitionsAndQuizzes?: boolean;
+  canDeleteOrEditCoreStudentData?: boolean;
+  canExportDatabaseBackups?: boolean;
+}
+
+export interface TeacherAccessRecord {
+  id: string;
+  name: string;
+  email: string;
+  roleTitle: string;
+  staffRole?: StaffHierarchyRole;
+  status: 'active' | 'blocked' | 'pending';
+  lastSyncAt: string;
+  assignedCirclesCount: number;
+  assignedCircleNames?: string[];
+  restrictToAssignedCircles?: boolean;
+  authProvider?: StaffAuthProvider;
+  whatsappPhone?: string;
+  specialization?: string;
+  requestedPosition?: 'محفظ حلقة' | 'مشرف تعليمي' | 'مسؤول مالي / إداري';
+  requestedAt?: string;
+  lastActiveAt?: string;
+  sessionsRecordedCount?: number;
+  customPermissions?: Partial<SupervisorPermissions>;
+  customTeacherPermissions?: Partial<TeacherPermissions>;
+  googleUid?: string;
+  photoURL?: string | null;
+  motherName?: string;
+  grandfatherName?: string;
+  grandmotherName?: string;
+  uncleName?: string;
+}
+
+export type FeeStatus = 'مدفوع' | 'متأخر' | 'معفى';
+
+export interface FeeRecord {
+  month: string; // YYYY-MM
+  amount: number;
+  status: FeeStatus;
+  paidAt?: string;
+  method?: string;
+  notes?: string;
+  receiptNumber?: string;
+}
+
+export interface Student {
+  id: string;
+  name: string;
+  code?: string;
+  pin?: string;
+  phone?: string;
+  parentPhone?: string;
+  circleId?: string;
+  circleName?: string;
+  currentSurah?: string;
+  currentAyah?: number;
+  targetJuz?: number;
+  memorizedJuzCount?: number;
+  points?: number;
+  attendanceRate?: number;
+  status?: 'active' | 'inactive' | 'graduated' | string;
+  subscriptionStatus?: 'paid' | 'pending' | 'exempt';
+  createdAt?: string;
+  guardianName: string;
+  whatsappPhone: string; // Normalized e.g., 201012345678
+  guardianPhone?: string;
+  guardianPin: string; // 6-digit PIN for Guardian Portal
+  masteryScore?: number;
+  attendanceStreak?: number;
+  googleUid?: string;
+  googleEmail?: string;
+  googleAvatarUrl?: string | null;
+  motherName?: string;
+  grandfatherName?: string;
+  grandmotherName?: string;
+  uncleName?: string;
+  accountStatus?: StudentAccountStatus; // نشط | متوقف | مؤرشف
+  privacyPreference?: StudentPrivacyPreference; // standard | limited | private
+  assignedTeacherEmail?: string;
+  assignedTeacherName?: string;
+  archivedAt?: string;
+  archiveReason?: string;
+  lastStudentLoginAt?: string;
+  lastLoginDate?: string;
+  level: StudentLevel;
+  circle: string;
+  plan: StudentPlan;
+  linkLogic: LinkLogic;
+  scheduleDays: number[]; // 0 = Sunday ... 6 = Saturday
+  scheduleTime: string; // HH:mm
+  sessionDuration: number; // minutes
+  startDate: string;
+  notes: string;
+  memorizedSurahs: number[]; // 1..114
+  inProgressSurahs: number[];
+  memorizedJuz: number[]; // 1..30
+  currentStop: {
+    surahId: number;
+    surahName: string;
+    ayah: number;
+    juzNumber: number;
+  };
+  monthlyFee: number;
+  fees: FeeRecord[];
+  disciplineWarnings: {
+    id: string;
+    date: string;
+    level: 'تنبيه' | 'إنذار أول' | 'إنذار نهائي';
+    reason: string;
+  }[];
+  // v13 Enterprise Extensions
+  riwayah?: QuranRiwayah;
+  timezoneLabel?: string;
+  timezoneOffsetDiff?: number;
+  accessibilityMode?: StudentAccessibilityMode;
+  foundationLevel?: FoundationLevelNumber; // 1..8 in Al-Imam Hybrid Foundation System
+  completedFoundationLevels?: number[]; // e.g. [1, 2, 3]
+  xpPoints?: number;
+  badges?: string[];
+  hasGoldenCrown?: boolean;
+  permanentMeetingUrl?: string;
+  customMutashabihat?: StudentCustomMutashabih[];
+  dailyAudioRecordings?: HomePracticeSubmission[];
+  recitationAudioClips?: StudentRecitationAudioClip[];
+  lastRecitationAudioUrl?: string;
+  fiveFortressesLog?: Record<
+    string,
+    {
+      listened3Times: boolean;
+      readPreparation: boolean;
+      reviewedLink: boolean;
+      reviewedFar: boolean;
+    }
+  >;
+  // Additive Pedagogical Advisor & Learning Challenges Profile (Schema = 12 compatible)
+  pedagogicalProfile?: StudentPedagogicalProfile;
+  publishedFamilyGuidance?: PublishedFamilyGuidanceNote[];
+  filialGratitudeLog?: {
+    id: string;
+    date: string;
+    message: string;
+    surahName?: string;
+  }[];
+  characterHabitCompletedDates?: string[];
+  makeupSessions?: MakeupSessionCard[];
+  // ev/quran-tracker Memory Freshness & One-Tap Revision Logs
+  surahRevisionLogs?: Record<number, SurahRevisionLogEntry>;
+  trackerDailyGoalSurahs?: number;
+  trackerLastReviewedDate?: string;
+}
+
+export interface CircleGroup {
+  id: string;
+  name: string;
+  teacherName: string;
+  level: string;
+  scheduleDays: number[];
+  scheduleTime: string;
+  days?: string | number[];
+  time?: string;
+  duration: number;
+  description: string;
+  isActive?: boolean;
+  permanentMeetingUrl?: string;
+  // Substitute Teacher & Handover (نظام المعلم البديل وبطاقة تسليم الحلقة)
+  substituteTeacherName?: string;
+  substituteActive?: boolean;
+  substituteUntilDate?: string;
+  substituteHandoverNotes?: string;
+  // Seasonal & Intensive Mode (أوضاع المواسم والدورات المكثفة)
+  seasonalMode?: SeasonalModeType;
+  seasonalTitle?: string;
+  seasonalTargetLabel?: string;
+  seasonalDailyGoal?: string;
+  seasonalChallengeReward?: string;
+  lastRecitationEngineStartedDate?: string;
+  lastRecitationEngineStartedAt?: string;
+}
+
+export interface ExamRecord {
+  id: string;
+  studentId: string;
+  date: string;
+  type:
+    | 'تحديد مستوى'
+    | 'اختبار سورة'
+    | 'اختبار جزء'
+    | 'اختبار خمسة أجزاء'
+    | 'اختبار ختمة وتجويد'
+    | 'اختبار مرحلة تأسيسية';
+  targetTitle: string;
+  committee: string[];
+  score: number;
+  grade: GradeType;
+  passed: boolean;
+  notes: string;
+  certificateIssued: boolean;
+  riwayah?: QuranRiwayah | string;
+  verificationCode?: string;
+}
+
+export interface IjazahRecord {
+  id: string;
+  studentId: string;
+  riwayah: string;
+  sheikhName: string;
+  sanadChain: string;
+  issueDate: string;
+  examId?: string;
+  certificateNumber: string;
+  verificationCode?: string;
+  notes: string;
+}
+
+export interface TaskItem {
+  id: string;
+  title: string;
+  studentId?: string;
+  dueDate: string; // YYYY-MM-DD
+  priority: 'عادي' | 'مرتفع';
+  completed: boolean;
+  notes: string;
+}
+
+export interface SmartBoardStroke {
+  id: string;
+  tool: 'pen' | 'highlighter' | 'circle' | 'arrow' | 'calligraphy' | 'stamp';
+  color: string;
+  width: number;
+  points: { x: number; y: number }[];
+  stampText?: string;
+}
+
+export interface TeacherRatingRecord {
+  id: string;
+  studentId: string;
+  studentName: string;
+  guardianName: string;
+  date: string;
+  punctuality: number; // 1..5 الانضباط بالموعد ووقت الحصة
+  explanationAndFoundation: number; // 1..5 الشرح والتأسيس
+  encouragementAndPatience: number; // 1..5 التشجيع والصبر
+  audioAndBoardQuality: number; // 1..5 جودة الصوت والسبورة
+  guardianFollowUp: number; // 1..5 المتابعة مع ولي الأمر
+  gratitudeMessage: string;
+  criteria?: {
+    punctuality: number;
+    encouragement: number;
+    tajweedPrecision: number;
+    assignmentClarity: number;
+    smartBoardQuality: number;
+  };
+  averageScore?: number;
+  thankYouMessage?: string;
+}
+
+export interface HomePracticeSubmission {
+  id: string;
+  studentId: string;
+  studentName: string;
+  date: string;
+  createdAt?: string;
+  surahName: string;
+  fromAyah: number;
+  toAyah: number;
+  durationSeconds: number;
+  audioDataUrl?: string;
+  studentNote: string;
+  guardianNote?: string;
+  reviewed: boolean;
+  reviewedByTeacher?: boolean;
+  teacherFeedback?: string;
+  grade?: GradeType;
+  masteryScore?: number;
+  timestampPins?: TimestampAudioFeedbackPin[];
+}
+
+export type HomeRecitationSubmission = HomePracticeSubmission;
+
+export interface WeeklyGoals {
+  newAyatTarget: number;
+  reviewsTarget: number;
+  sessionsTarget: number;
+  attendanceTarget: number;
+}
+
+export interface AcademySettings {
+  teacherName: string;
+  academyName: string;
+  tagline: string;
+  Slogan?: string;
+  officialWhatsappPhone?: string;
+  teacherPin?: string;
+  referenceTimezone?: string;
+  theme: 'light' | 'dark' | 'sepia';
+  fontSize: 'sm' | 'md' | 'lg' | 'xl';
+  fontScale?: 'sm' | 'md' | 'lg';
+  defaultReciter: ReciterId;
+  weeklyGoals: WeeklyGoals;
+  whatsappHeader: string;
+  whatsappFooter: string;
+  notificationsEnabled: boolean;
+  notifyOverdueTasks: boolean;
+  notifyUrgentStudents: boolean;
+  reminderIntervalMinutes: number;
+  showHijriDates: boolean;
+  // Privacy & Data Protection Settings (إعدادات الخصوصية ووضع المشاركة المحدودة)
+  hidePersonalDataFromPublic?: boolean;
+  limitedSharingMode?: boolean;
+  maskStudentPhoneAndPin?: boolean;
+  hideFinancialDetailsInStudentPortal?: boolean;
+  hideFamilyLineageInPublicViews?: boolean;
+  // Owner-defined Supervisor Permissions Matrix (صلاحيات المشرفين المحددة من المالك)
+  supervisorPermissions?: SupervisorPermissions;
+  // Owner-defined Additional Teacher Permissions Matrix (صلاحيات المحفظين الإضافية المحددة من المالك)
+  teacherPermissions?: TeacherPermissions;
+  // Automatic Cloud Backup to Firebase Cloud Firestore
+  autoCloudBackupEnabled?: boolean;
+}
+
+export type PublicBookmarkCategory = 'khatmah' | 'memorization' | 'tadabbur';
+
+export interface PublicMushafBookmark {
+  id: string;
+  category: PublicBookmarkCategory;
+  label: string;
+  pageNumber: number;
+  surahId: number;
+  surahName: string;
+  ayahNumber: number;
+  juzNumber: number;
+  updatedAt: string;
+  note?: string;
+}
+
+export interface OwnerEncouragementItem {
+  id: string;
+  badgeTitle: string;
+  message: string;
+  sentAt: string;
+  senderName: string;
+  isRead: boolean;
+}
+
+export interface PublicVisitorWirdRecord {
+  id: string;
+  visitorName: string;
+  planType: 'monthly_30' | 'bimonthly_60' | 'custom_pages';
+  planLabel: string;
+  dailyTargetPages: number;
+  currentPage: number;
+  currentSurahName: string;
+  currentJuz: number;
+  pagesReadToday: number;
+  totalPagesRead: number;
+  completedKhatmahs: number;
+  streakDays: number;
+  completionPercentage: number;
+  ameenCount: number;
+  badges: string[];
+  lastActiveAt: string;
+  encouragements: OwnerEncouragementItem[];
+}
+
+export interface WaqfImpactStats {
+  totalVisitors: number;
+  pwaInstallsCount: number;
+  totalPagesRead: number;
+  totalVersesRead?: number;
+  totalJuzRead: number;
+  completedKhatmahsCount: number;
+  ameenPrayersCount: number;
+  offlineDownloadsCount: number;
+}
+
+export type LearningStyleType = 'سمعي' | 'بصري' | 'حركي/تفاعلي';
+
+export type PedagogicalChallengeKey =
+  | 'pronunciation_makharij'
+  | 'attention_hyperactivity'
+  | 'slow_memorization'
+  | 'weak_reading_foundation'
+  | 'balanced_typical';
+
+export type SuggestedEducationalTrack =
+  | 'تأسيس قرائي'
+  | 'تلقين سمعي'
+  | 'تحفيظ بجرعات صغيرة';
+
+export interface StudentPedagogicalProfile {
+  assessedAt: string;
+  learningStyle: LearningStyleType;
+  primaryChallengeKey: PedagogicalChallengeKey;
+  primaryChallengeLabel: string;
+  secondaryChallenges: string[];
+  suggestedTrack: SuggestedEducationalTrack;
+  teacherActionSummary: string;
+  recommendedSessionSliceMinutes: number;
+  recommendedDailyListeningCount: number;
+  rawAnswers: Record<string, string>;
+  teacherObservationNote?: string;
+}
+
+export interface PublishedFamilyGuidanceNote {
+  id: string;
+  title: string;
+  categoryLabel: string;
+  bodyText: string;
+  createdAt: string;
+  teacherName: string;
+  targetLetterOrSurah?: string;
+}
+
+export type SmartQuizQuestionCategory =
+  | 'complete_ayah'
+  | 'identify_surah'
+  | 'continue_after_ayah'
+  | 'tajweed_and_madd';
+
+export interface SmartQuizQuestion {
+  id: string;
+  category: SmartQuizQuestionCategory;
+  categoryLabel: string;
+  juz: number;
+  surahName: string;
+  ayahNumber: number;
+  verseSnippet: string;
+  questionPrompt: string;
+  options: string[];
+  correctOptionIndex: number;
+  modelAnswerText: string;
+  tajweedExplanation?: string;
+  points: number;
+}
+
+export interface PeerCompetitionSubmission {
+  id: string;
+  competitionId: string;
+  studentId: string;
+  studentName: string;
+  circleName: string;
+  level: StudentLevel;
+  score: number; // 0 - 100 (Accuracy)
+  correctCount: number;
+  totalQuestions: number;
+  timeSeconds: number; // Speed in seconds
+  compositeRankPoints: number; // Combined Accuracy + Speed Bonus
+  rank?: number;
+  awardedCup?: '🏆 الكأس الذهبي' | '🥈 الكأس الفضي' | '🥉 الكأس البرونزي' | '🎖️ وسام التميز';
+  awardedBadge?: string;
+  completedAt: string;
+}
+
+export interface PeerCompetitionPack {
+  id: string;
+  title: string;
+  description: string;
+  targetLevel: StudentLevel | 'الكل';
+  scopeLabel: string;
+  questions: SmartQuizQuestion[];
+  timeLimitSeconds: number;
+  xpRewardFirst: number;
+  xpRewardParticipant: number;
+  badgeTitle: string;
+  status: 'نشطة' | 'مكتملة';
+  createdAt: string;
+  submissions: PeerCompetitionSubmission[];
+}
+
+export interface ScheduleSlotRecord {
+  id: string;
+  ownerUid?: string;
+  entityType: 'circle' | 'student';
+  targetId: string;
+  targetName: string;
+  circleName: string;
+  teacherName: string;
+  teacherEmail?: string;
+  scheduleDays: number[];
+  scheduleTime: string;
+  durationMinutes: number;
+  level?: string;
+  updatedByEmail?: string;
+  updatedAtIso?: string;
+}
+
+export type SurahFreshnessStatus = 'fresh' | 'due' | 'stale' | 'not_memorized';
+
+export interface SurahRevisionLogEntry {
+  surahId: number;
+  lastReviewedDate: string; // YYYY-MM-DD
+  reviewCount: number;
+  masteryScore: number; // 0-100
+  notes?: string;
+}
+
+export interface QuranTrackerStudentRecord {
+  id: string;
+  ownerUid?: string;
+  studentId: string;
+  studentName: string;
+  circleName: string;
+  streakDays: number;
+  lastActiveDate: string; // YYYY-MM-DD
+  dailyGoalSurahs: number;
+  surahRevisionMapJson: string;
+  updatedAtIso?: string;
+}

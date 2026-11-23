@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>أكاديمية الإمام لتحفيظ القرآن الكريم | بالقرآن نحيا — تصميم وتطوير Sayed Mohamed Elkomy</title>
+    <meta name="description" content="أكاديمية الإمام لتحفيظ القرآن الكريم | بالقرآن نحيا — تصميم وتطوير Sayed Mohamed Elkomy. منظومة متكاملة لإدارة حلقات تحفيظ القرآن الكريم، محرك التسميع الخماسي، السبورة الذكية، الاختبارات والإجازات، والمتابعة الأسرية وبوابة ولي الأمر." />
+    <meta property="og:title" content="أكاديمية الإمام لتحفيظ القرآن الكريم | بالقرآن نحيا — تصميم وتطوير Sayed Mohamed Elkomy" />
+    <meta property="og:description" content="أكاديمية الإمام لتحفيظ القرآن الكريم | بالقرآن نحيا — تصميم وتطوير Sayed Mohamed Elkomy. منظومة متكاملة لإدارة حلقات تحفيظ القرآن الكريم، محرك التسميع الخماسي، السبورة الذكية، الاختبارات والإجازات، والمتابعة الأسرية وبوابة ولي الأمر." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://welivequranacademy.online/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#064e3b" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="أكاديمية الإمام" />
+    <link id="dynamic-pwa-manifest" rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="alternate icon" type="image/png" href="/assets/aistudio/favicon_3bce66e2.png" />
+    <link rel="apple-touch-icon" href="/assets/aistudio/icon-192_29a1c2ce.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Cairo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  </head>
+  <body class="bg-[#f6f7f2] text-[#14281d] antialiased selection:bg-[#145a3a] selection:text-white">
+    <div id="root">
+      <!-- شاشة تحميل أولية أنيقة تختفي تلقائياً فور تحميل React وتمنع أي شاشة بيضاء -->
+      <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#042016 0%,#064e3b 55%,#0f291e 100%);color:#ffffff;font-family:'Cairo',sans-serif;padding:24px;text-align:center;">
+        <div style="width:76px;height:76px;border-radius:22px;background:rgba(197,155,39,0.18);border:2px solid rgba(246,216,120,0.65);display:flex;align-items:center;justify-content:center;font-size:36px;margin-bottom:16px;box-shadow:0 12px 30px rgba(0,0,0,0.35);">
+          🕌
+        </div>
+        <h1 style="font-size:22px;font-weight:800;margin:0 0 6px 0;color:#f6d878;">
+          أكاديمية الإمام لتحفيظ القرآن الكريم
+        </h1>
+        <p style="font-size:14px;font-weight:700;margin:0 0 18px 0;color:#a7f3d0;">
+          بالقرآن نحيا • جارٍ فتح البوابة القرآنية...
+        </p>
+        <div style="width:180px;height:6px;border-radius:999px;background:rgba(255,255,255,0.15);overflow:hidden;">
+          <div style="width:65%;height:100%;background:linear-gradient(90deg,#c59b27,#34d399);border-radius:999px;"></div>
+        </div>
+        <button
+          id="imam-splash-rescue-btn"
+          type="button"
+          onclick="(function(){try{if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(x){x.unregister();});});}if(window.caches){window.caches.keys().then(function(k){k.forEach(function(n){window.caches.delete(n);});});}localStorage.removeItem('imam_academy_pwa_store_v13_sanitized');}catch(e){}window.location.href=window.location.pathname+'?v='+Date.now();})()"
+          style="display:none;margin-top:20px;padding:10px 20px;border-radius:14px;background:#c59b27;color:#14281d;font-family:'Cairo',sans-serif;font-size:13px;font-weight:800;border:none;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,0.3);"
+        >
+          🔄 اضغط هنا لتحديث النسخة وفتح البوابة فوراً
+        </button>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx" onerror="window.__LOAD_COMPILED_APP_FALLBACK__ && window.__LOAD_COMPILED_APP_FALLBACK__()"></script>
+    <script>
+      (function () {
+        // Suppress benign Vite HMR WebSocket unhandled rejections in preview/cloud environments
+        window.addEventListener('unhandledrejection', function (ev) {
+          var reasonStr = String((ev && ev.reason && (ev.reason.message || ev.reason)) || '');
+          if (reasonStr.indexOf('WebSocket closed without opened') !== -1 || reasonStr.indexOf('vite') !== -1) {
+            ev.preventDefault();
+          }
+        });
+
+        var fallbackLoaded = false;
+        function injectCompiledBundleNow() {
+          if (fallbackLoaded || window.__AL_IMAM_APP_MOUNTED__) return;
+          if (document.querySelector('script[src*="/assets/app.js"]')) return;
+          fallbackLoaded = true;
+          if (!document.querySelector('link[href*="/assets/app.css"]')) {
+            var cssLink = document.createElement('link');
+            cssLink.rel = 'stylesheet';
+            cssLink.href = '/assets/app.css';
+            document.head.appendChild(cssLink);
+          }
+          var jsScript = document.createElement('script');
+          jsScript.type = 'module';
+          jsScript.src = '/assets/app.js';
+          document.body.appendChild(jsScript);
+        }
+        window.__LOAD_COMPILED_APP_FALLBACK__ = injectCompiledBundleNow;
+
+        // If running on static GitHub Pages / custom domain where raw index.html was served from root branch
+        // without Vite rewriting /src/main.tsx, immediately load pre-compiled /assets/app.js & /assets/app.css
+        var host = (window.location.hostname || '').toLowerCase();
+        var isStaticPublicDomain =
+          host.indexOf('welivequranacademy.online') !== -1 ||
+          host.indexOf('github.io') !== -1 ||
+          host.indexOf('pages.dev') !== -1 ||
+          host.indexOf('netlify.app') !== -1 ||
+          host.indexOf('vercel.app') !== -1;
+
+        if (isStaticPublicDomain && !document.querySelector('script[src*="/assets/app.js"]')) {
+          injectCompiledBundleNow();
+        } else {
+          // On Vite dev/preview hosts, also provide a fast 1.8s fallback to the compiled bundle if dev waterfall is slow
+          setTimeout(function () {
+            if (!window.__AL_IMAM_APP_MOUNTED__) {
+              injectCompiledBundleNow();
+            }
+          }, 1800);
+        }
+
+        setTimeout(function () {
+          if (!window.__AL_IMAM_APP_MOUNTED__) {
+            var btn = document.getElementById('imam-splash-rescue-btn');
+            if (btn) btn.style.display = 'inline-block';
+          }
+        }, 3500);
+
+        // Register /sw-push.js for Push Notifications & Background Teacher Alerts
+        if ('serviceWorker' in navigator) {
+          window.addEventListener('load', function () {
+            navigator.serviceWorker
+              .register('/sw-push.js', { scope: '/' })
+              .then(function (reg) {
+                if (reg && reg.waiting) {
+                  reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                }
+              })
+              .catch(function () {});
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>

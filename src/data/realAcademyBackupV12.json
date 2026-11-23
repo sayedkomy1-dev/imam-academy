@@ -1,0 +1,13 @@
+{
+  "version": "13.0.0",
+  "settings": {
+    "teacherName": "المعلم المشرف",
+    "academyName": "أكاديمية الإمام لتحفيظ القرآن الكريم",
+    "tagline": "بالقرآن نحيا",
+    "officialWhatsappPhone": "01000000000",
+    "teacherPin": "1234"
+  },
+  "circles": [],
+  "students": [],
+  "sessions": []
+}

@@ -1,0 +1,779 @@
+{
+  "entities": {
+    "UserAuthProfile": {
+      "title": "UserAuthProfile",
+      "description": "Authenticated user profile linked to Google Sign-In UID including extended family fields.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the user."
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Display name from Google account."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["teacher", "supervisor", "guardian", "student"],
+          "maxLength": 32,
+          "description": "Portal role selected by the user."
+        },
+        "motherName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Mother's name (اسم الوالدة)."
+        },
+        "grandfatherName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Grandfather's name (اسم الجد)."
+        },
+        "grandmotherName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Grandmother's name (اسم الجدة)."
+        },
+        "uncleName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Uncle's name (اسم العم)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": ["uid", "displayName", "role", "createdAt", "updatedAt"]
+    },
+    "ExtendedFamilyRecord": {
+      "title": "ExtendedFamilyRecord",
+      "description": "Student or Teacher record linked to Google UID containing extended family lineage fields.",
+      "type": "object",
+      "properties": {
+        "recordId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Local Student or Teacher ID."
+        },
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Google Firebase Auth UID linked to this record."
+        },
+        "entityType": {
+          "type": "string",
+          "enum": ["student", "teacher", "supervisor"],
+          "maxLength": 32,
+          "description": "Whether this record belongs to a student, teacher, or supervisor."
+        },
+        "personName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Full name of the student or teacher."
+        },
+        "motherName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Mother's name (اسم الوالدة)."
+        },
+        "grandfatherName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Grandfather's name (اسم الجد)."
+        },
+        "grandmotherName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Grandmother's name (اسم الجدة)."
+        },
+        "uncleName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Uncle's name (اسم العم)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "recordId",
+        "ownerUid",
+        "entityType",
+        "personName",
+        "motherName",
+        "grandfatherName",
+        "grandmotherName",
+        "uncleName",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AcademyCloudSnapshot": {
+      "title": "AcademyCloudSnapshot",
+      "description": "Per-owner or per-teacher academy roster, full JSON backup payload, and progress summary synced to Firestore.",
+      "type": "object",
+      "properties": {
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the teacher or supervisor owning this snapshot."
+        },
+        "teacherEmail": {
+          "type": "string",
+          "maxLength": 160,
+          "description": "Normalized email of the teacher or owner associated with this backup."
+        },
+        "academyName": {
+          "type": "string",
+          "maxLength": 160,
+          "description": "Academy title."
+        },
+        "studentsCount": {
+          "type": "number",
+          "description": "Total active students count."
+        },
+        "sessionsCount": {
+          "type": "number",
+          "description": "Total recorded sessions count."
+        },
+        "schemaVersion": {
+          "type": "number",
+          "description": "Local schema version number."
+        },
+        "payloadJson": {
+          "type": "string",
+          "maxLength": 950000,
+          "description": "Serialized JSON backup payload containing students, circles, sessions, exams, ijazahs, tasks, and settings."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "ownerUid",
+        "academyName",
+        "studentsCount",
+        "sessionsCount",
+        "schemaVersion",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "StaffRegistrationRecord": {
+      "title": "StaffRegistrationRecord",
+      "description": "Teacher or Supervisor registration record managed by the Academy Owner in Firestore.",
+      "type": "object",
+      "properties": {
+        "staffId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Unique identifier of the staff member."
+        },
+        "googleUid": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Linked Google Auth UID."
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Full name of the teacher or supervisor."
+        },
+        "email": {
+          "type": "string",
+          "maxLength": 160,
+          "description": "Google email address of the teacher or supervisor."
+        },
+        "roleTitle": {
+          "type": "string",
+          "maxLength": 160,
+          "description": "Job title in the academy."
+        },
+        "staffRole": {
+          "type": "string",
+          "enum": ["owner", "supervisor", "teacher"],
+          "maxLength": 32,
+          "description": "Staff hierarchy role."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "blocked", "pending"],
+          "maxLength": 32,
+          "description": "Approval status controlled by Owner or Supervisor."
+        },
+        "assignedCirclesCount": {
+          "type": "number",
+          "description": "Number of assigned Quran circles."
+        },
+        "motherName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Mother's name (اسم الوالدة)."
+        },
+        "grandfatherName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Grandfather's name (اسم الجد)."
+        },
+        "grandmotherName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Grandmother's name (اسم الجدة)."
+        },
+        "uncleName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Uncle's name (اسم العم)."
+        },
+        "customPermissionsJson": {
+          "type": "string",
+          "maxLength": 4000,
+          "description": "Serialized JSON of customTeacherPermissions or customPermissions assigned by the Owner to this specific teacher or supervisor."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "staffId",
+        "googleUid",
+        "name",
+        "email",
+        "roleTitle",
+        "staffRole",
+        "status",
+        "assignedCirclesCount",
+        "motherName",
+        "grandfatherName",
+        "grandmotherName",
+        "uncleName",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AccessCodeRequestRecord": {
+      "title": "AccessCodeRequestRecord",
+      "description": "Guardian or Student portal access code request synced in Firestore.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Unique identifier of the access code request."
+        },
+        "studentName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Name of the student."
+        },
+        "guardianPhone": {
+          "type": "string",
+          "maxLength": 40,
+          "description": "Guardian phone number."
+        },
+        "circleOrTeacherName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Circle or teacher name."
+        },
+        "portalType": {
+          "type": "string",
+          "enum": ["guardian", "student"],
+          "maxLength": 32,
+          "description": "Target portal type."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "resolved"],
+          "maxLength": 32,
+          "description": "Resolution status of the request."
+        },
+        "matchedStudentId": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Matched student ID."
+        },
+        "matchedStudentName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Matched student full name."
+        },
+        "matchedStudentCode": {
+          "type": "string",
+          "maxLength": 60,
+          "description": "Generated student code."
+        },
+        "matchedStudentPin": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "Generated 6-digit PIN."
+        },
+        "matchedTeacherName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Matched teacher name."
+        },
+        "matchedCircleName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Matched circle name."
+        },
+        "createdAt": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Creation date string."
+        },
+        "resolvedAt": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Resolution date string."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "id",
+        "studentName",
+        "guardianPhone",
+        "circleOrTeacherName",
+        "portalType",
+        "status",
+        "matchedStudentId",
+        "matchedStudentName",
+        "matchedStudentCode",
+        "matchedStudentPin",
+        "matchedTeacherName",
+        "matchedCircleName",
+        "createdAt",
+        "resolvedAt",
+        "updatedAt"
+      ]
+    },
+    "LateSessionAlertRecord": {
+      "title": "LateSessionAlertRecord",
+      "description": "Real-time late student session alert generated by the browser Background Service from Firestore schedule data.",
+      "type": "object",
+      "properties": {
+        "alertId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Unique identifier of the late session alert (e.g., late_2026-11-07_st-1_late_5m)."
+        },
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Authenticated UID of the teacher or supervisor recording the alert."
+        },
+        "studentId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Student ID."
+        },
+        "studentName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Student full name."
+        },
+        "circleName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Scheduled circle name."
+        },
+        "scheduledTime": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "Scheduled circle time (HH:mm)."
+        },
+        "date": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "Local date string (YYYY-MM-DD)."
+        },
+        "minutesLate": {
+          "type": "number",
+          "description": "Elapsed minutes past the scheduled circle start time."
+        },
+        "stage": {
+          "type": "string",
+          "enum": ["late_5m", "late_15m"],
+          "maxLength": 32,
+          "description": "Late notification escalation stage."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "resolved"],
+          "maxLength": 32,
+          "description": "Whether the late alert is still active or resolved (student attended/excused)."
+        },
+        "surahName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Assigned Surah name for the session."
+        },
+        "ayahNumber": {
+          "type": "number",
+          "description": "Current stop ayah number."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "alertId",
+        "ownerUid",
+        "studentId",
+        "studentName",
+        "circleName",
+        "scheduledTime",
+        "date",
+        "minutesLate",
+        "stage",
+        "status",
+        "surahName",
+        "ayahNumber",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "RecitationEngineStatusRecord": {
+      "title": "RecitationEngineStatusRecord",
+      "description": "Tracks whether the Teacher Recitation Engine (محرك التسميع) has been started in Firestore for each scheduled Quran circle.",
+      "type": "object",
+      "properties": {
+        "engineStatusId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Unique identifier for the circle recitation engine status on a given date (e.g., engine_2026-11-23_circle-1)."
+        },
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Authenticated UID of the teacher or supervisor."
+        },
+        "circleId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Circle ID."
+        },
+        "circleName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Circle name."
+        },
+        "teacherName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Assigned teacher name."
+        },
+        "teacherEmail": {
+          "type": "string",
+          "maxLength": 160,
+          "description": "Assigned teacher email."
+        },
+        "scheduledTime": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "Scheduled start time of the circle (HH:mm)."
+        },
+        "date": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "Local date string (YYYY-MM-DD)."
+        },
+        "engineState": {
+          "type": "string",
+          "enum": ["not_started", "started", "completed"],
+          "maxLength": 32,
+          "description": "Current state of the Recitation Engine for this circle."
+        },
+        "activeStudentId": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Currently selected student ID in the Recitation Engine."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "engineStatusId",
+        "ownerUid",
+        "circleId",
+        "circleName",
+        "teacherName",
+        "teacherEmail",
+        "scheduledTime",
+        "date",
+        "engineState",
+        "activeStudentId",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ScheduleSlotRecord": {
+      "title": "ScheduleSlotRecord",
+      "description": "Drag-and-drop schedule slot record for circles and individual student sessions managed via ScheduleBoard in Firestore.",
+      "type": "object",
+      "properties": {
+        "slotId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Unique identifier for the schedule slot (e.g., slot_circle_cir-1 or slot_student_st-1)."
+        },
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Authenticated UID of the teacher or supervisor modifying the schedule."
+        },
+        "entityType": {
+          "type": "string",
+          "enum": ["circle", "student"],
+          "maxLength": 32,
+          "description": "Whether this slot belongs to a circle or a student."
+        },
+        "targetId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Circle ID or Student ID."
+        },
+        "targetName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Circle name or Student full name."
+        },
+        "circleName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Associated Quran circle name."
+        },
+        "teacherName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Assigned teacher name."
+        },
+        "teacherEmail": {
+          "type": "string",
+          "maxLength": 160,
+          "description": "Assigned teacher email."
+        },
+        "scheduleDaysCsv": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "Comma-separated day indices (0..6) e.g. '0,2,4'."
+        },
+        "scheduleTime": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "Scheduled start time in HH:mm format."
+        },
+        "durationMinutes": {
+          "type": "number",
+          "description": "Session duration in minutes."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "slotId",
+        "ownerUid",
+        "entityType",
+        "targetId",
+        "targetName",
+        "circleName",
+        "teacherName",
+        "teacherEmail",
+        "scheduleDaysCsv",
+        "scheduleTime",
+        "durationMinutes",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "QuranTrackerLogRecord": {
+      "title": "QuranTrackerLogRecord",
+      "description": "Tracks per-student Surah memory freshness, last reviewed dates, daily streak, and 1-tap revision logs inspired by ev/quran-tracker.",
+      "type": "object",
+      "properties": {
+        "trackerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Unique identifier for the student's Quran tracker log (e.g., tracker_st-1)."
+        },
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Authenticated UID of the teacher, supervisor, or student."
+        },
+        "studentId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Student ID."
+        },
+        "studentName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Student full name."
+        },
+        "circleName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Quran circle name."
+        },
+        "streakDays": {
+          "type": "number",
+          "description": "Consecutive daily revision streak count."
+        },
+        "lastActiveDate": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "Date of last logged revision (YYYY-MM-DD)."
+        },
+        "dailyGoalSurahs": {
+          "type": "number",
+          "description": "Daily target number of Surahs to review."
+        },
+        "surahRevisionMapJson": {
+          "type": "string",
+          "maxLength": 120000,
+          "description": "Serialized JSON map of Surah IDs (1..114) to their lastReviewedDate, reviewCount, and masteryScore."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "trackerId",
+        "ownerUid",
+        "studentId",
+        "studentName",
+        "circleName",
+        "streakDays",
+        "lastActiveDate",
+        "dailyGoalSurahs",
+        "surahRevisionMapJson",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/user_profiles/{userId}": {
+      "schema": "UserAuthProfile",
+      "description": "Stores authenticated user's profile scoped strictly to their UID."
+    },
+    "/family_records/{recordId}": {
+      "schema": "ExtendedFamilyRecord",
+      "description": "Stores Student and Teacher extended family details linked to Google UID."
+    },
+    "/academy_snapshots/{snapshotId}": {
+      "schema": "AcademyCloudSnapshot",
+      "description": "Stores academy cloud sync metadata owned by the authenticated user."
+    },
+    "/staff_registrations/{staffId}": {
+      "schema": "StaffRegistrationRecord",
+      "description": "Stores teacher and supervisor registrations managed by the Owner (approve, suspend, delete)."
+    },
+    "/access_code_requests/{requestId}": {
+      "schema": "AccessCodeRequestRecord",
+      "description": "Stores guardian and student access code requests."
+    },
+    "/late_session_alerts/{alertId}": {
+      "schema": "LateSessionAlertRecord",
+      "description": "Stores real-time late student session alerts generated by the Background Service."
+    },
+    "/recitation_engine_status/{engineStatusId}": {
+      "schema": "RecitationEngineStatusRecord",
+      "description": "Stores per-circle daily Recitation Engine status monitored by the Cron-like Teacher Push Scheduler."
+    },
+    "/schedule_slots/{slotId}": {
+      "schema": "ScheduleSlotRecord",
+      "description": "Stores drag-and-drop schedule slots for circles and students updated via ScheduleBoard."
+    },
+    "/quran_tracker_logs/{trackerId}": {
+      "schema": "QuranTrackerLogRecord",
+      "description": "Stores per-student Surah memory freshness and 1-tap revision logs."
+    }
+  }
+}
+
+

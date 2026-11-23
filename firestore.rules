@@ -1,0 +1,409 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'sayedkomy1@gmail.com' ||
+        request.auth.token.email == 'sayedkomy2@gmail.com' ||
+        request.auth.token.email == 'info.welivequran@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidOptionalFamilyField(data, fieldName) {
+      return !(fieldName in data) || (data[fieldName] is string && data[fieldName].size() <= 120);
+    }
+
+    function isValidUserAuthProfile(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'role', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'displayName', 'role', 'motherName', 'grandfatherName', 'grandmotherName', 'uncleName', 'createdAt', 'updatedAt']) &&
+        data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 &&
+        data.uid.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.uid == request.auth.uid &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+        data.role is string && data.role.size() <= 32 &&
+        (data.role in ['teacher', 'supervisor', 'guardian', 'student']) &&
+        isValidOptionalFamilyField(data, 'motherName') &&
+        isValidOptionalFamilyField(data, 'grandfatherName') &&
+        isValidOptionalFamilyField(data, 'grandmotherName') &&
+        isValidOptionalFamilyField(data, 'uncleName') &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidExtendedFamilyRecord(data) {
+      return data.keys().hasAll(['recordId', 'ownerUid', 'entityType', 'personName', 'motherName', 'grandfatherName', 'grandmotherName', 'uncleName', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['recordId', 'ownerUid', 'entityType', 'personName', 'motherName', 'grandfatherName', 'grandmotherName', 'uncleName', 'createdAt', 'updatedAt']) &&
+        data.recordId is string && data.recordId.size() >= 1 && data.recordId.size() <= 128 &&
+        data.recordId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.ownerUid is string && data.ownerUid.size() >= 1 && data.ownerUid.size() <= 128 &&
+        data.ownerUid.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.ownerUid == request.auth.uid &&
+        data.entityType is string && data.entityType.size() <= 32 &&
+        (data.entityType in ['student', 'teacher', 'supervisor']) &&
+        data.personName is string && data.personName.size() >= 1 && data.personName.size() <= 120 &&
+        data.motherName is string && data.motherName.size() <= 120 &&
+        data.grandfatherName is string && data.grandfatherName.size() <= 120 &&
+        data.grandmotherName is string && data.grandmotherName.size() <= 120 &&
+        data.uncleName is string && data.uncleName.size() <= 120 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAcademyCloudSnapshot(data) {
+      return data.keys().hasAll(['ownerUid', 'academyName', 'studentsCount', 'sessionsCount', 'schemaVersion', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['ownerUid', 'teacherEmail', 'academyName', 'studentsCount', 'sessionsCount', 'schemaVersion', 'payloadJson', 'createdAt', 'updatedAt']) &&
+        data.ownerUid is string && data.ownerUid.size() >= 1 && data.ownerUid.size() <= 128 &&
+        data.ownerUid.matches('^[a-zA-Z0-9_\\-]+$') &&
+        (!('teacherEmail' in data) || (data.teacherEmail is string && data.teacherEmail.size() <= 160)) &&
+        data.academyName is string && data.academyName.size() >= 1 && data.academyName.size() <= 160 &&
+        data.studentsCount is int && data.studentsCount >= 0 && data.studentsCount <= 100000 &&
+        data.sessionsCount is int && data.sessionsCount >= 0 && data.sessionsCount <= 1000000 &&
+        data.schemaVersion is int && data.schemaVersion == 12 &&
+        (!('payloadJson' in data) || (data.payloadJson is string && data.payloadJson.size() <= 950000)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidStaffRegistrationRecord(data) {
+      return data.keys().hasAll(['staffId', 'googleUid', 'name', 'email', 'roleTitle', 'staffRole', 'status', 'assignedCirclesCount', 'motherName', 'grandfatherName', 'grandmotherName', 'uncleName', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['staffId', 'googleUid', 'name', 'email', 'roleTitle', 'staffRole', 'status', 'assignedCirclesCount', 'motherName', 'grandfatherName', 'grandmotherName', 'uncleName', 'customPermissionsJson', 'createdAt', 'updatedAt']) &&
+        data.staffId is string && data.staffId.size() >= 1 && data.staffId.size() <= 128 &&
+        data.staffId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.googleUid is string && data.googleUid.size() <= 128 &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 160 &&
+        data.roleTitle is string && data.roleTitle.size() >= 1 && data.roleTitle.size() <= 160 &&
+        data.staffRole is string && data.staffRole.size() <= 32 &&
+        (data.staffRole in ['owner', 'supervisor', 'teacher', 'financial_manager']) &&
+        data.status is string && data.status.size() <= 32 &&
+        (data.status in ['active', 'blocked', 'pending']) &&
+        data.assignedCirclesCount is int && data.assignedCirclesCount >= 0 && data.assignedCirclesCount <= 100 &&
+        data.motherName is string && data.motherName.size() <= 120 &&
+        data.grandfatherName is string && data.grandfatherName.size() <= 120 &&
+        data.grandmotherName is string && data.grandmotherName.size() <= 120 &&
+        data.uncleName is string && data.uncleName.size() <= 120 &&
+        (!('customPermissionsJson' in data) || (data.customPermissionsJson is string && data.customPermissionsJson.size() <= 4000)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAccessCodeRequestRecord(data) {
+      return data.keys().hasAll(['id', 'studentName', 'guardianPhone', 'circleOrTeacherName', 'portalType', 'status', 'matchedStudentId', 'matchedStudentName', 'matchedStudentCode', 'matchedStudentPin', 'matchedTeacherName', 'matchedCircleName', 'createdAt', 'resolvedAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'studentName', 'guardianPhone', 'circleOrTeacherName', 'portalType', 'status', 'matchedStudentId', 'matchedStudentName', 'matchedStudentCode', 'matchedStudentPin', 'matchedTeacherName', 'matchedCircleName', 'createdAt', 'resolvedAt', 'updatedAt']) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 128 &&
+        data.id.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.studentName is string && data.studentName.size() <= 120 &&
+        data.guardianPhone is string && data.guardianPhone.size() <= 40 &&
+        data.circleOrTeacherName is string && data.circleOrTeacherName.size() <= 120 &&
+        data.portalType is string && data.portalType.size() <= 32 &&
+        (data.portalType in ['guardian', 'student']) &&
+        data.status is string && data.status.size() <= 32 &&
+        (data.status in ['pending', 'resolved']) &&
+        data.matchedStudentId is string && data.matchedStudentId.size() <= 120 &&
+        data.matchedStudentName is string && data.matchedStudentName.size() <= 120 &&
+        data.matchedStudentCode is string && data.matchedStudentCode.size() <= 60 &&
+        data.matchedStudentPin is string && data.matchedStudentPin.size() <= 32 &&
+        data.matchedTeacherName is string && data.matchedTeacherName.size() <= 120 &&
+        data.matchedCircleName is string && data.matchedCircleName.size() <= 120 &&
+        data.createdAt is string && data.createdAt.size() <= 64 &&
+        data.resolvedAt is string && data.resolvedAt.size() <= 64 &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidLateSessionAlertRecord(data) {
+      return data.keys().hasAll(['alertId', 'ownerUid', 'studentId', 'studentName', 'circleName', 'scheduledTime', 'date', 'minutesLate', 'stage', 'status', 'surahName', 'ayahNumber', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['alertId', 'ownerUid', 'studentId', 'studentName', 'circleName', 'scheduledTime', 'date', 'minutesLate', 'stage', 'status', 'surahName', 'ayahNumber', 'createdAt', 'updatedAt']) &&
+        data.alertId is string && data.alertId.size() >= 1 && data.alertId.size() <= 128 &&
+        data.alertId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.ownerUid is string && data.ownerUid.size() >= 1 && data.ownerUid.size() <= 128 &&
+        data.ownerUid.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.ownerUid == request.auth.uid &&
+        data.studentId is string && data.studentId.size() >= 1 && data.studentId.size() <= 128 &&
+        data.studentId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.studentName is string && data.studentName.size() >= 1 && data.studentName.size() <= 120 &&
+        data.circleName is string && data.circleName.size() >= 1 && data.circleName.size() <= 120 &&
+        data.scheduledTime is string && data.scheduledTime.size() >= 1 && data.scheduledTime.size() <= 32 &&
+        data.date is string && data.date.size() >= 1 && data.date.size() <= 32 &&
+        data.minutesLate is int && data.minutesLate >= 1 && data.minutesLate <= 1440 &&
+        data.stage is string && data.stage.size() <= 32 &&
+        (data.stage in ['late_5m', 'late_15m']) &&
+        data.status is string && data.status.size() <= 32 &&
+        (data.status in ['active', 'resolved']) &&
+        data.surahName is string && data.surahName.size() >= 1 && data.surahName.size() <= 120 &&
+        data.ayahNumber is int && data.ayahNumber >= 1 && data.ayahNumber <= 300 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidRecitationEngineStatusRecord(data) {
+      return data.keys().hasAll(['engineStatusId', 'ownerUid', 'circleId', 'circleName', 'teacherName', 'teacherEmail', 'scheduledTime', 'date', 'engineState', 'activeStudentId', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['engineStatusId', 'ownerUid', 'circleId', 'circleName', 'teacherName', 'teacherEmail', 'scheduledTime', 'date', 'engineState', 'activeStudentId', 'createdAt', 'updatedAt']) &&
+        data.engineStatusId is string && data.engineStatusId.size() >= 1 && data.engineStatusId.size() <= 128 &&
+        data.engineStatusId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.ownerUid is string && data.ownerUid.size() >= 1 && data.ownerUid.size() <= 128 &&
+        data.ownerUid.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.ownerUid == request.auth.uid &&
+        data.circleId is string && data.circleId.size() >= 1 && data.circleId.size() <= 128 &&
+        data.circleId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.circleName is string && data.circleName.size() >= 1 && data.circleName.size() <= 120 &&
+        data.teacherName is string && data.teacherName.size() >= 1 && data.teacherName.size() <= 120 &&
+        data.teacherEmail is string && data.teacherEmail.size() <= 160 &&
+        data.scheduledTime is string && data.scheduledTime.size() >= 1 && data.scheduledTime.size() <= 32 &&
+        data.date is string && data.date.size() >= 1 && data.date.size() <= 32 &&
+        data.engineState is string && data.engineState.size() <= 32 &&
+        (data.engineState in ['not_started', 'started', 'completed']) &&
+        data.activeStudentId is string && data.activeStudentId.size() <= 128 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidScheduleSlotRecord(data) {
+      return data.keys().hasAll(['slotId', 'ownerUid', 'entityType', 'targetId', 'targetName', 'circleName', 'teacherName', 'teacherEmail', 'scheduleDaysCsv', 'scheduleTime', 'durationMinutes', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['slotId', 'ownerUid', 'entityType', 'targetId', 'targetName', 'circleName', 'teacherName', 'teacherEmail', 'scheduleDaysCsv', 'scheduleTime', 'durationMinutes', 'createdAt', 'updatedAt']) &&
+        data.slotId is string && data.slotId.size() >= 1 && data.slotId.size() <= 128 &&
+        data.slotId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.ownerUid is string && data.ownerUid.size() >= 1 && data.ownerUid.size() <= 128 &&
+        data.ownerUid.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.ownerUid == request.auth.uid &&
+        data.entityType is string && data.entityType.size() <= 32 &&
+        (data.entityType in ['circle', 'student']) &&
+        data.targetId is string && data.targetId.size() >= 1 && data.targetId.size() <= 128 &&
+        data.targetId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.targetName is string && data.targetName.size() >= 1 && data.targetName.size() <= 120 &&
+        data.circleName is string && data.circleName.size() >= 1 && data.circleName.size() <= 120 &&
+        data.teacherName is string && data.teacherName.size() >= 1 && data.teacherName.size() <= 120 &&
+        data.teacherEmail is string && data.teacherEmail.size() <= 160 &&
+        data.scheduleDaysCsv is string && data.scheduleDaysCsv.size() >= 1 && data.scheduleDaysCsv.size() <= 32 &&
+        data.scheduleTime is string && data.scheduleTime.size() >= 1 && data.scheduleTime.size() <= 32 &&
+        data.durationMinutes is int && data.durationMinutes >= 5 && data.durationMinutes <= 360 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidQuranTrackerLogRecord(data) {
+      return data.keys().hasAll(['trackerId', 'ownerUid', 'studentId', 'studentName', 'circleName', 'streakDays', 'lastActiveDate', 'dailyGoalSurahs', 'surahRevisionMapJson', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['trackerId', 'ownerUid', 'studentId', 'studentName', 'circleName', 'streakDays', 'lastActiveDate', 'dailyGoalSurahs', 'surahRevisionMapJson', 'createdAt', 'updatedAt']) &&
+        data.trackerId is string && data.trackerId.size() >= 1 && data.trackerId.size() <= 128 &&
+        data.trackerId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.ownerUid is string && data.ownerUid.size() >= 1 && data.ownerUid.size() <= 128 &&
+        data.ownerUid.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.ownerUid == request.auth.uid &&
+        data.studentId is string && data.studentId.size() >= 1 && data.studentId.size() <= 128 &&
+        data.studentId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.studentName is string && data.studentName.size() >= 1 && data.studentName.size() <= 120 &&
+        data.circleName is string && data.circleName.size() >= 1 && data.circleName.size() <= 120 &&
+        data.streakDays is int && data.streakDays >= 0 && data.streakDays <= 10000 &&
+        data.lastActiveDate is string && data.lastActiveDate.size() >= 1 && data.lastActiveDate.size() <= 32 &&
+        data.dailyGoalSurahs is int && data.dailyGoalSurahs >= 1 && data.dailyGoalSurahs <= 114 &&
+        data.surahRevisionMapJson is string && data.surahRevisionMapJson.size() >= 2 && data.surahRevisionMapJson.size() <= 120000 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    match /admins/{adminUid} {
+      allow get: if isSignedIn() && isValidId(adminUid) && request.auth.uid == adminUid;
+      allow list, create, update, delete: if false;
+    }
+
+    match /user_profiles/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isBootstrappedAdmin());
+      allow list: if isSignedIn() && existing().uid == request.auth.uid;
+      allow create: if isSignedIn() &&
+        isValidId(userId) &&
+        request.auth.uid == userId &&
+        isValidUserAuthProfile(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isSignedIn() &&
+        isValidId(userId) &&
+        request.auth.uid == userId &&
+        isValidUserAuthProfile(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'role', 'motherName', 'grandfatherName', 'grandmotherName', 'uncleName', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    match /family_records/{recordId} {
+      allow get: if isSignedIn() && isValidId(recordId) && (existing().ownerUid == request.auth.uid || isBootstrappedAdmin());
+      allow list: if isSignedIn() && existing().ownerUid == request.auth.uid;
+      allow create: if isSignedIn() &&
+        isValidId(recordId) &&
+        incoming().recordId == recordId &&
+        isValidExtendedFamilyRecord(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isSignedIn() &&
+        isValidId(recordId) &&
+        incoming().recordId == existing().recordId &&
+        isValidExtendedFamilyRecord(incoming()) &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['entityType', 'personName', 'motherName', 'grandfatherName', 'grandmotherName', 'uncleName', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    match /academy_snapshots/{snapshotId} {
+      allow get: if isSignedIn() && isValidId(snapshotId) && (existing().ownerUid == request.auth.uid || isBootstrappedAdmin());
+      allow list: if isSignedIn() && (existing().ownerUid == request.auth.uid || isBootstrappedAdmin());
+      allow create: if isSignedIn() &&
+        isValidId(snapshotId) &&
+        incoming().ownerUid == request.auth.uid &&
+        isValidAcademyCloudSnapshot(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isSignedIn() &&
+        isValidId(snapshotId) &&
+        isValidAcademyCloudSnapshot(incoming()) &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['ownerUid', 'teacherEmail', 'academyName', 'studentsCount', 'sessionsCount', 'schemaVersion', 'payloadJson', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    match /staff_registrations/{staffId} {
+      allow get: if isSignedIn() && isValidId(staffId) && (existing().googleUid == request.auth.uid || isBootstrappedAdmin());
+      allow list: if isSignedIn() && (existing().googleUid == request.auth.uid || isBootstrappedAdmin());
+      allow create: if isSignedIn() &&
+        isValidId(staffId) &&
+        incoming().staffId == staffId &&
+        isValidStaffRegistrationRecord(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isSignedIn() &&
+        isValidId(staffId) &&
+        incoming().staffId == existing().staffId &&
+        isValidStaffRegistrationRecord(incoming()) &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['googleUid', 'name', 'email', 'roleTitle', 'staffRole', 'status', 'assignedCirclesCount', 'motherName', 'grandfatherName', 'grandmotherName', 'uncleName', 'customPermissionsJson', 'updatedAt']);
+      allow delete: if isSignedIn() && isValidId(staffId) && isBootstrappedAdmin();
+    }
+
+    match /access_code_requests/{requestId} {
+      allow get: if isSignedIn() && isValidId(requestId) && isBootstrappedAdmin();
+      allow list: if isSignedIn() && isBootstrappedAdmin();
+      allow create: if isSignedIn() &&
+        isValidId(requestId) &&
+        incoming().id == requestId &&
+        isValidAccessCodeRequestRecord(incoming()) &&
+        incoming().updatedAt == request.time;
+      allow update: if isSignedIn() &&
+        isValidId(requestId) &&
+        incoming().id == existing().id &&
+        isValidAccessCodeRequestRecord(incoming()) &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'matchedStudentId', 'matchedStudentName', 'matchedStudentCode', 'matchedStudentPin', 'matchedTeacherName', 'matchedCircleName', 'resolvedAt', 'updatedAt']);
+      allow delete: if isSignedIn() && isValidId(requestId) && isBootstrappedAdmin();
+    }
+
+    match /late_session_alerts/{alertId} {
+      allow get: if isSignedIn() && isValidId(alertId) && (existing().ownerUid == request.auth.uid || isBootstrappedAdmin());
+      allow list: if isSignedIn() && (existing().ownerUid == request.auth.uid || isBootstrappedAdmin());
+      allow create: if isSignedIn() &&
+        isValidId(alertId) &&
+        incoming().alertId == alertId &&
+        isValidLateSessionAlertRecord(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isSignedIn() &&
+        isValidId(alertId) &&
+        incoming().alertId == existing().alertId &&
+        isValidLateSessionAlertRecord(incoming()) &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (isBootstrappedAdmin() || existing().status != 'resolved') &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['minutesLate', 'stage', 'status', 'surahName', 'ayahNumber', 'updatedAt']);
+      allow delete: if isSignedIn() && isValidId(alertId) && (existing().ownerUid == request.auth.uid || isBootstrappedAdmin());
+    }
+
+    match /recitation_engine_status/{engineStatusId} {
+      allow get: if isSignedIn() && isValidId(engineStatusId) && (existing().ownerUid == request.auth.uid || isBootstrappedAdmin());
+      allow list: if isSignedIn() && (existing().ownerUid == request.auth.uid || isBootstrappedAdmin());
+      allow create: if isSignedIn() &&
+        isValidId(engineStatusId) &&
+        incoming().engineStatusId == engineStatusId &&
+        isValidRecitationEngineStatusRecord(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isSignedIn() &&
+        isValidId(engineStatusId) &&
+        incoming().engineStatusId == existing().engineStatusId &&
+        isValidRecitationEngineStatusRecord(incoming()) &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (isBootstrappedAdmin() || existing().engineState != 'completed') &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['engineState', 'activeStudentId', 'teacherName', 'teacherEmail', 'scheduledTime', 'updatedAt']);
+      allow delete: if isSignedIn() && isValidId(engineStatusId) && (existing().ownerUid == request.auth.uid || isBootstrappedAdmin());
+    }
+
+    match /schedule_slots/{slotId} {
+      allow get: if isSignedIn() && isValidId(slotId) && (existing().ownerUid == request.auth.uid || isBootstrappedAdmin());
+      allow list: if isSignedIn() && (existing().ownerUid == request.auth.uid || isBootstrappedAdmin());
+      allow create: if isSignedIn() &&
+        isValidId(slotId) &&
+        incoming().slotId == slotId &&
+        isValidScheduleSlotRecord(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isSignedIn() &&
+        isValidId(slotId) &&
+        incoming().slotId == existing().slotId &&
+        isValidScheduleSlotRecord(incoming()) &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['targetName', 'circleName', 'teacherName', 'teacherEmail', 'scheduleDaysCsv', 'scheduleTime', 'durationMinutes', 'updatedAt']);
+      allow delete: if isSignedIn() && isValidId(slotId) && (existing().ownerUid == request.auth.uid || isBootstrappedAdmin());
+    }
+
+    match /quran_tracker_logs/{trackerId} {
+      allow get: if isSignedIn() && isValidId(trackerId) && (existing().ownerUid == request.auth.uid || isBootstrappedAdmin());
+      allow list: if isSignedIn() && (existing().ownerUid == request.auth.uid || isBootstrappedAdmin());
+      allow create: if isSignedIn() &&
+        isValidId(trackerId) &&
+        incoming().trackerId == trackerId &&
+        isValidQuranTrackerLogRecord(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isSignedIn() &&
+        isValidId(trackerId) &&
+        incoming().trackerId == existing().trackerId &&
+        isValidQuranTrackerLogRecord(incoming()) &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['studentName', 'circleName', 'streakDays', 'lastActiveDate', 'dailyGoalSurahs', 'surahRevisionMapJson', 'updatedAt']);
+      allow delete: if isSignedIn() && isValidId(trackerId) && (existing().ownerUid == request.auth.uid || isBootstrappedAdmin());
+    }
+  }
+}
+
+
