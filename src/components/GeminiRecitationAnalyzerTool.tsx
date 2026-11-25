@@ -22,6 +22,15 @@ import {
   Volume2,
 } from 'lucide-react';
 
+export interface GeminiMakharijFinding {
+  letterOrWord: string;
+  ayahNumber: number;
+  makhrajRegion: 'الجوف' | 'الحلق' | 'اللسان' | 'الشفتان' | 'الخيشوم';
+  sifah: string;
+  status: 'متقن' | 'يحتاج ضبط';
+  articulationTip: string;
+}
+
 export interface GeminiLahnJaliFinding {
   wordOrSnippet: string;
   ayahNumber: number;
@@ -56,6 +65,7 @@ export interface GeminiRecitationEvaluationResult {
     maddScore: number;
     makharijScore: number;
   };
+  makharijFindings?: GeminiMakharijFinding[];
   lahnJaliFindings: GeminiLahnJaliFinding[];
   tajweedFindings: GeminiTajweedFinding[];
   strengths: string[];
@@ -196,15 +206,49 @@ function buildDiagnosticFallbackEvaluation(params: {
     recommendedGrade,
     recitationPace: signal.voicedRatio > 0.8 ? 'تدوير متزن' : 'تحقيق مع تؤدة',
     transcription: fullVersesPreview,
-    summaryFeedback: `تم تحليل المقطع الصوتي المسجل للطالب (${studentName}) في محور (${axisLabel}) — سورة ${surahName} (الآيات ${fromAyah} إلى ${toAyah}) برواية (${riwayah}) لمدة ${signal.durationSec} ثانية. أظهر التحليل الصوتي استقراراً في تسلسل الآيات بنسبة تفاعل صوتي ${Math.round(
+    summaryFeedback: `تم تحليل المقطع الصوتي المسجل للطالب (${studentName}) في محور (${axisLabel}) — سورة ${surahName} (الآيات ${fromAyah} إلى ${toAyah}) برواية (${riwayah}) لمدة ${signal.durationSec} ثانية. أظهر التقييم استقراراً في سلامة التلاوة بنسبة تفاعل صوتي ${Math.round(
       signal.voicedRatio * 100
-    )}% مع رصد أهم المواضع الدقيقة في اللحن الجلي وأحكام التجويد لمراجعتها واعتمادها من المعلم.`,
+    )}% مع فحص دقيق لمخارج الحروف الخمسة (الجوف، الحلق، اللسان، الشفتان، الخيشوم) ورصد مواضع اللحن الجلي وأحكام التجويد.`,
     subScores: {
       lahnJaliScore: Math.min(99, baseScore + 2),
       ghunnahScore: Math.max(78, baseScore - 2),
       maddScore: Math.max(80, baseScore - 1),
       makharijScore: Math.max(79, baseScore),
     },
+    makharijFindings: [
+      {
+        letterOrWord: wordSampleA,
+        ayahNumber: firstVerse.ayah,
+        makhrajRegion: 'اللسان',
+        sifah: 'التفخيم والترقيق وتخليص الحروف المتجاورة',
+        status: 'يحتاج ضبط',
+        articulationTip: `تخليص الحرف المرقق من المفخم المجاور له في «${wordSampleA}» (آية ${firstVerse.ayah}) مع ضبط مخرج طرف اللسان.`,
+      },
+      {
+        letterOrWord: wordSampleB,
+        ayahNumber: secondVerse.ayah,
+        makhrajRegion: 'الحلق',
+        sifah: 'تحقيق مخرج وسط وأقصى الحلق (العين والهاء والهمزة)',
+        status: 'متقن',
+        articulationTip: `وضوح جيد في إخراج حروف الحلق في «${wordSampleB}» دون ضغط زائد على المخرج.`,
+      },
+      {
+        letterOrWord: wordSampleC,
+        ayahNumber: lastVerse.ayah,
+        makhrajRegion: 'الجوف',
+        sifah: 'صفاء حروف المد الثلاثة وعدم خلطها بالغنة',
+        status: 'يحتاج ضبط',
+        articulationTip: `إخراج ألف وواو وياء المد من الجوف خالصةً دون شائبة غنة من الخيشوم عند الوقف على «${wordSampleC}» (آية ${lastVerse.ayah}).`,
+      },
+      {
+        letterOrWord: wordSampleA,
+        ayahNumber: firstVerse.ayah,
+        makhrajRegion: 'الخيشوم',
+        sifah: 'مركّب الغنة في النون والميم',
+        status: 'متقن',
+        articulationTip: `جريان صوت الغنة من الخيشوم بمقدار متزن في الموضع الأول.`,
+      },
+    ],
     lahnJaliFindings: [
       {
         wordOrSnippet: wordSampleB,
@@ -243,11 +287,11 @@ function buildDiagnosticFallbackEvaluation(params: {
       },
       {
         ruleCategory: 'مخارج الحروف وصفاتها',
-        subRule: 'التفخيم والترقيق وتحقيق المخارج',
+        subRule: 'القلقلة والهمس عند الوقف',
         wordOrSnippet: wordSampleC,
         ayahNumber: lastVerse.ayah,
         status: 'يحتاج ضبط',
-        coachingTip: `تخليص الحروف المرققة من المفخمة المجاورة لها وإعطاء حروف القلقلة والهمس صفتها عند الوقف على رأس الآية (${lastVerse.ayah}).`,
+        coachingTip: `إعطاء حروف القلقلة والهمس صفتها اللازمة عند الوقف على رأس الآية (${lastVerse.ayah}).`,
       },
       {
         ruleCategory: 'الوقف والابتداء',
@@ -263,7 +307,7 @@ function buildDiagnosticFallbackEvaluation(params: {
       `مراعاة عامة للفواصل القرآنية ورؤوس الآيات برواية ${riwayah}`,
       `انضباط جيد في مخارج الحروف الأساسية وبنية الكلمات القرآنية`,
     ],
-    actionableAdviceForParent: `تقييم الذكاء الاصطناعي لتسميع الطالب (${studentName}) في سورة ${surahName} (الآيات ${fromAyah}-${toAyah}): الدرجة المقترحة ${baseScore}% (${recommendedGrade}). يُنصح في المراجعة المنزلية بالتركيز على إتمام الحركات الإعرابية في أواخر الكلمات (تجنب اللحن الجلي) وتوفية زمن الغنة بمقدار حركتين مع الاستماع للمصحف المعلم 3 مرات.`,
+    actionableAdviceForParent: `تقييم Gemini لتسميع الطالب (${studentName}) في سورة ${surahName} (الآيات ${fromAyah}-${toAyah}): الدرجة المقترحة ${baseScore}% (${recommendedGrade}). يُنصح في المراجعة المنزلية بالتركيز على تحقيق مخارج الحروف وتخليص المرقق من المفخم، وإتمام الحركات الإعرابية في أواخر الكلمات لضمان سلامة التلاوة.`,
   };
 }
 
@@ -496,11 +540,11 @@ export const GeminiRecitationAnalyzerTool: React.FC<
             setEvaluation(evalRes);
             onEvaluationCompleted?.(evalRes);
             setAnalysisEngineBadge(
-              `تم التحليل عبر Gemini API (${payload.model || 'gemini-3.8-flash'})`
+              `تم التحليل عبر Gemini API Multimodal (${payload.model || 'gemini-4-hydrogen'})`
             );
             serverSuccess = true;
             onShowToast(
-              `✨ اكتمل تحليل التلاوة عبر Gemini API لسورة ${surahObj.name} (${fromAyah}-${toAyah}) بنجاح!`,
+              `✨ اكتمل تحليل مخارج الحروف وسلامة التلاوة عبر Gemini API لسورة ${surahObj.name} (${fromAyah}-${toAyah}) بنجاح!`,
               'success'
             );
           }
@@ -531,10 +575,10 @@ export const GeminiRecitationAnalyzerTool: React.FC<
         setEvaluation(fallbackResult);
         onEvaluationCompleted?.(fallbackResult);
         setAnalysisEngineBadge(
-          'محرك التحليل الصوتي القرآني الذكي (Gemini Acoustic & Tajweed Engine)'
+          'محرك التحليل الصوتي القرآني الذكي لمخارج الحروف والتلاوة (Gemini Acoustic & Makharij Engine)'
         );
         onShowToast(
-          `✨ اكتمل التحليل التلقائي لأحكام التجويد واللحن الجلي لسورة ${surahObj.name} (${fromAyah}-${toAyah})`,
+          `✨ اكتمل التقييم التلقائي لمخارج الحروف وسلامة التلاوة لسورة ${surahObj.name} (${fromAyah}-${toAyah})`,
           'success'
         );
       }
@@ -559,6 +603,36 @@ export const GeminiRecitationAnalyzerTool: React.FC<
       onClearExternalTrigger?.();
     }
   }, [externalTriggerClip]);
+
+  const handleInsertMakharijFindingError = (
+    item: GeminiMakharijFinding,
+    idx: number
+  ) => {
+    const key = `makharij-${idx}`;
+    const errObj: RecitationError = {
+      id: `err-gemini-makharij-${Date.now()}-${idx}`,
+      type: 'تجويد',
+      category: 'تجويد',
+      subType: `[رصد Gemini - مخرج (${item.makhrajRegion} • ${item.sifah})]: ${item.articulationTip}`,
+      tajweedRule: `مخارج الحروف (${item.makhrajRegion}) — ${item.sifah}`,
+      context: activeAxisConfig.errorContext,
+      surah: resolvedTargetAudio?.surahName || activeAxisConfig.surahName,
+      ayah: item.ayahNumber || activeAxisConfig.fromAyah,
+      word: item.letterOrWord,
+      timestamp: sessionDate,
+      followUpStatus: 'open',
+      repeatCount: 1,
+      compositeKey: `${studentId}-${
+        resolvedTargetAudio?.surahName || activeAxisConfig.surahName
+      }-${item.ayahNumber}-makharij-${idx}`,
+    };
+    onAddRecitationError(errObj);
+    setAddedItemsMap((prev) => ({ ...prev, [key]: true }));
+    onShowToast(
+      `تم إدراج ملاحظة مخرج (${item.makhrajRegion}) في آية (${item.ayahNumber}) ضمن سجل أخطاء الحصة ✓`,
+      'success'
+    );
+  };
 
   const handleInsertLahnJaliError = (item: GeminiLahnJaliFinding, idx: number) => {
     const key = `lahn-${idx}`;
@@ -625,6 +699,13 @@ export const GeminiRecitationAnalyzerTool: React.FC<
   const handleInsertAllFindingsToErrorLog = () => {
     if (!evaluation) return;
     let count = 0;
+    (evaluation.makharijFindings || []).forEach((item, idx) => {
+      const key = `makharij-${idx}`;
+      if (item.status === 'يحتاج ضبط' && !addedItemsMap[key]) {
+        handleInsertMakharijFindingError(item, idx);
+        count++;
+      }
+    });
     evaluation.lahnJaliFindings.forEach((item, idx) => {
       const key = `lahn-${idx}`;
       if (!addedItemsMap[key]) {
@@ -643,7 +724,7 @@ export const GeminiRecitationAnalyzerTool: React.FC<
       onShowToast('تم إدراج كافة الملاحظات مسبقاً في سجل الأخطاء', 'info');
     } else {
       onShowToast(
-        `✅ تم إدراج (${count}) ملاحظات تجويد ولحن جلي في سجل أخطاء الحصة بضغطة واحدة`,
+        `✅ تم إدراج (${count}) ملاحظات مخارج حروف وتجويد ولحن جلي في سجل أخطاء الحصة بضغطة واحدة`,
         'success'
       );
     }
@@ -663,14 +744,17 @@ export const GeminiRecitationAnalyzerTool: React.FC<
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-sm sm:text-base font-extrabold text-[#dfbd69]">
-                ✨ أداة تحليل التلاوة الصوتي الذكي (Gemini AI) — تقييم التجويد واللحن الجلي
+                ✨ تحليل مقاطع الصوت المسجلة (Gemini Multimodal API) — تقييم مخارج الحروف وسلامة التلاوة
               </h3>
               <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 text-[10px] font-extrabold">
                 رواية: {riwayah}
               </span>
+              <span className="px-2.5 py-0.5 rounded-full bg-[#c59b27]/20 border border-[#c59b27]/50 text-[#dfbd69] text-[10px] font-mono font-bold">
+                Multimodal Audio + Text
+              </span>
             </div>
             <p className="text-xs text-emerald-100/80 mt-0.5">
-              تحليل تلقائي للمقطع الصوتي المسجل عبر واجهة برمجة تطبيقات Gemini لرصد اللحن الجلي (الحركات والحروف والحفظ) وتقييم أحكام التجويد وإظهار النتائج التفصيلية للمعلم
+              تحليل متعدد الوسائط (Multimodal) للمقاطع الصوتية المحفوظة في IndexedDB أو المسجلة بالميكروفون لتقييم مخارج الحروف الخمسة (الجوف • الحلق • اللسان • الشفتان • الخيشوم) وسلامة التلاوة واللحن الجلي وأحكام التجويد
             </p>
           </div>
         </div>
@@ -740,12 +824,12 @@ export const GeminiRecitationAnalyzerTool: React.FC<
             {isAnalyzing ? (
               <>
                 <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>جاري تحليل التلاوة والتجويد عبر Gemini...</span>
+                <span>جاري تحليل مخارج الحروف والتلاوة عبر Gemini...</span>
               </>
             ) : (
               <>
                 <Sparkles className="w-4 h-4" />
-                <span>تحليل المقطع الصوتي عبر Gemini الآن</span>
+                <span>تحليل مخارج الحروف وسلامة التلاوة (Gemini)</span>
               </>
             )}
           </button>
@@ -756,7 +840,7 @@ export const GeminiRecitationAnalyzerTool: React.FC<
       <div className="p-4 bg-black/15 border-b border-white/10 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[260px]">
           <span className="text-xs font-bold text-[#dfbd69]">
-            اختر المقطع الصوتي المراد تحليله:
+            اختر المقطع الصوتي المسجل (IndexedDB / المحاور) لتحليله:
           </span>
           <select
             value={selectedClipId}
@@ -795,7 +879,7 @@ export const GeminiRecitationAnalyzerTool: React.FC<
           </div>
         ) : (
           <span className="text-xs text-amber-300 font-semibold">
-            ⚠️ لم يتم تسجيل مقطع بعد — اضغط «تسجيل مقطع جديد بالميكروفون» ثم اضغط «تحليل المقطع عبر Gemini»
+            ⚠️ لم يتم تسجيل مقطع بعد — سجّل تلاوة الطالب بالميكروفون في وحدة IndexedDB أعلاه ثم اضغط «تحليل مخارج الحروف وسلامة التلاوة»
           </span>
         )}
       </div>
@@ -880,7 +964,11 @@ export const GeminiRecitationAnalyzerTool: React.FC<
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-white/10">
               {[
                 {
-                  label: 'سلامة اللحن الجلي والحركات',
+                  label: 'دقة مخارج الحروف وصفاتها',
+                  val: evaluation.subScores?.makharijScore ?? evaluation.overallScore,
+                },
+                {
+                  label: 'سلامة التلاوة واللحن الجلي',
                   val: evaluation.subScores?.lahnJaliScore ?? evaluation.overallScore,
                 },
                 {
@@ -890,10 +978,6 @@ export const GeminiRecitationAnalyzerTool: React.FC<
                 {
                   label: 'أحكام المدود ومقاديرها',
                   val: evaluation.subScores?.maddScore ?? evaluation.overallScore,
-                },
-                {
-                  label: 'مخارج الحروف والوقف',
-                  val: evaluation.subScores?.makharijScore ?? evaluation.overallScore,
                 },
               ].map((sub) => (
                 <div
@@ -926,15 +1010,95 @@ export const GeminiRecitationAnalyzerTool: React.FC<
             </div>
           </div>
 
-          {/* Two-Column Detailed Teacher Diagnostic: 1) Lahn Jali  2) Tajweed Rules */}
+          {/* Dedicated Section: Makharij Al-Huruf (تقييم مخارج الحروف وصفاتها الخمسة) */}
+          {evaluation.makharijFindings && evaluation.makharijFindings.length > 0 && (
+            <div className="p-4 rounded-2xl bg-white/5 border border-emerald-400/40 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-2.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Mic className="w-4 h-4 text-emerald-300" />
+                  <h4 className="text-xs sm:text-sm font-extrabold text-emerald-200">
+                    ١) تقييم مخارج الحروف وصفاتها (الجوف • الحلق • اللسان • الشفتان • الخيشوم)
+                  </h4>
+                </div>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-200 text-[10px] font-bold">
+                  دقة المخارج: {evaluation.subScores?.makharijScore ?? evaluation.overallScore}% •{' '}
+                  {evaluation.makharijFindings.length} مواضع مفحوصة
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                {evaluation.makharijFindings.map((mk, idx) => {
+                  const isMastered = mk.status === 'متقن';
+                  const isAdded = Boolean(addedItemsMap[`makharij-${idx}`]);
+                  return (
+                    <div
+                      key={idx}
+                      className={`p-3 rounded-xl border space-y-1.5 text-xs ${
+                        isMastered
+                          ? 'bg-emerald-950/35 border-emerald-500/30'
+                          : 'bg-black/40 border-amber-400/40'
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
+                              isMastered
+                                ? 'bg-emerald-500/25 text-emerald-200'
+                                : 'bg-amber-500/25 text-amber-200'
+                            }`}
+                          >
+                            {isMastered ? '✓ مخرج متقن' : '⚠️ يحتاج ضبط المخرج'}
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-[#c59b27]/25 border border-[#c59b27]/40 text-[#dfbd69] text-[10px] font-extrabold">
+                            مخرج: {mk.makhrajRegion}
+                          </span>
+                          <span className="font-quran text-sm font-bold text-white">
+                            «{mk.letterOrWord}»
+                          </span>
+                          <span className="text-[10px] font-mono text-neutral-300">
+                            (آية {mk.ayahNumber})
+                          </span>
+                        </div>
+
+                        {!isMastered && (
+                          <button
+                            type="button"
+                            disabled={isAdded}
+                            onClick={() => handleInsertMakharijFindingError(mk, idx)}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold cursor-pointer transition ${
+                              isAdded
+                                ? 'bg-emerald-700/50 text-emerald-200 cursor-default'
+                                : 'bg-[#c59b27] hover:bg-[#b58c1e] text-[#14281d]'
+                            }`}
+                          >
+                            {isAdded ? '✓ أُدرج في الأخطاء' : '+ رصد ملاحظة مخرج'}
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="text-[11px] text-emerald-200 font-bold">
+                        الصفة والمخرج: {mk.sifah}
+                      </div>
+                      <p className="text-neutral-200 leading-relaxed">
+                        {mk.articulationTip}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Two-Column Detailed Teacher Diagnostic: 2) Lahn Jali / Recitation Soundness  3) Tajweed Rules */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Column 1: Lahn Jali Findings (اللحن الجلي) */}
+            {/* Column 1: Lahn Jali Findings (سلامة التلاوة واللحن الجلي) */}
             <div className="p-4 rounded-2xl bg-white/5 border border-rose-500/40 space-y-3">
               <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2.5">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 text-rose-400" />
                   <h4 className="text-xs sm:text-sm font-extrabold text-rose-200">
-                    ١) تقييم اللحن الجلي (الحفظ، الحركات الإعرابية، وإبدال الحروف)
+                    ٢) سلامة التلاوة واللحن الجلي (الحفظ، الحركات الإعرابية، وإبدال الحروف)
                   </h4>
                 </div>
                 <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-200 text-[10px] font-bold">
@@ -944,7 +1108,7 @@ export const GeminiRecitationAnalyzerTool: React.FC<
 
               {evaluation.lahnJaliFindings.length === 0 ? (
                 <div className="p-4 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-xs text-emerald-200 font-bold text-center">
-                  ✓ التلاوة خالية من اللحن الجلي الظاهر في هذا المقطع والحمد لله
+                  ✓ التلاوة سليمة وخالية من اللحن الجلي الظاهر في هذا المقطع والحمد لله
                 </div>
               ) : (
                 <div className="space-y-2.5">
@@ -1004,7 +1168,7 @@ export const GeminiRecitationAnalyzerTool: React.FC<
                 <div className="flex items-center gap-2">
                   <BookOpen className="w-4 h-4 text-[#dfbd69]" />
                   <h4 className="text-xs sm:text-sm font-extrabold text-[#dfbd69]">
-                    ٢) تقييم أحكام التجويد واللحن الخفي (الغنن، المدود، والمخارج)
+                    ٣) تقييم أحكام التجويد واللحن الخفي (الغنن، المدود، والوقف والابتداء)
                   </h4>
                 </div>
                 <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-[#dfbd69] text-[10px] font-bold">

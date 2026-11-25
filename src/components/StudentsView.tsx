@@ -235,6 +235,178 @@ export const StudentsView: React.FC = () => {
     'إتمام حفظ ومراجعة المقرر بتقدير ممتاز'
   );
 
+  // Automatic WhatsApp Reminder Scheduler for Students without login > 3 days
+  const [showInactivityScheduler, setShowInactivityScheduler] = useState<boolean>(false);
+  const [onlyInactiveOver3DaysFilter, setOnlyInactiveOver3DaysFilter] = useState<boolean>(false);
+  const [inactivityAutoScheduleEnabled, setInactivityAutoScheduleEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('wlq_auto_wa_inactivity_enabled');
+      return saved ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+  const [inactivityThresholdDays, setInactivityThresholdDays] = useState<number>(() => {
+    try {
+      const saved = Number(localStorage.getItem('wlq_auto_wa_inactivity_days'));
+      return Number.isFinite(saved) && saved >= 1 ? saved : 3;
+    } catch {
+      return 3;
+    }
+  });
+  const [inactivityScheduleTime, setInactivityScheduleTime] = useState<string>(() => {
+    try {
+      return localStorage.getItem('wlq_auto_wa_inactivity_time') || '18:00';
+    } catch {
+      return '18:00';
+    }
+  });
+  const [inactivityCustomTemplate, setInactivityCustomTemplate] = useState<string>(() => {
+    try {
+      return (
+        localStorage.getItem('wlq_auto_wa_inactivity_template') ||
+        'السلام عليكم ورحمة الله وبركاته، ولي أمر الطالب *{studentName}* حفظه الله، نود تذكيركم بلطف بأنه مضى *{days} أيام* منذ آخر تسجيل دخول ومتابعة للطالب في بوابة أكاديمية الإمام (توقف الحفظ الحالي: سورة *{surahName}* آية *{ayah}*). نسعد بدخول الطالب اليوم لمراجعة ورده القرآني وتثبيت الحفظ.'
+      );
+    } catch {
+      return 'السلام عليكم ورحمة الله وبركاته، ولي أمر الطالب *{studentName}* حفظه الله، نود تذكيركم بلطف بأنه مضى *{days} أيام* منذ آخر تسجيل دخول ومتابعة للطالب في بوابة أكاديمية الإمام (توقف الحفظ الحالي: سورة *{surahName}* آية *{ayah}*). نسعد بدخول الطالب اليوم لمراجعة ورده القرآني وتثبيت الحفظ.';
+    }
+  });
+  const [scheduledReminderLog, setScheduledReminderLog] = useState<
+    Record<string, { scheduledAt: string; sentAt?: string; status: 'مجدول تلقائياً' | 'تم الإرسال عبر واتساب' }>
+  >(() => {
+    try {
+      const raw = localStorage.getItem('wlq_auto_wa_inactivity_log');
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [activeSequentialBatchIndex, setActiveSequentialBatchIndex] = useState<number>(0);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('wlq_auto_wa_inactivity_enabled', String(inactivityAutoScheduleEnabled));
+      localStorage.setItem('wlq_auto_wa_inactivity_days', String(inactivityThresholdDays));
+      localStorage.setItem('wlq_auto_wa_inactivity_time', inactivityScheduleTime);
+      localStorage.setItem('wlq_auto_wa_inactivity_template', inactivityCustomTemplate);
+      localStorage.setItem('wlq_auto_wa_inactivity_log', JSON.stringify(scheduledReminderLog));
+    } catch {
+      // ignore storage errors
+    }
+  }, [
+    inactivityAutoScheduleEnabled,
+    inactivityThresholdDays,
+    inactivityScheduleTime,
+    inactivityCustomTemplate,
+    scheduledReminderLog,
+  ]);
+
+  // Compute last login / activity date and days since login for each student
+  const studentInactivityMap = useMemo(() => {
+    const nowMs = Date.now();
+    const map: Record<
+      string,
+      {
+        lastLoginDateStr: string;
+        daysSinceLogin: number;
+        isOverThreshold: boolean;
+      }
+    > = {};
+
+    students.forEach((st) => {
+      const explicitLogin = st.lastStudentLoginAt || st.lastLoginDate;
+      const latestSessionDate = sessions
+        .filter((s) => s.studentId === st.id && s.status === 'حضر')
+        .map((s) => s.date)
+        .sort((a, b) => b.localeCompare(a))[0];
+
+      const referenceDateStr =
+        explicitLogin || latestSessionDate || st.trackerLastReviewedDate || st.startDate || '';
+
+      let daysSince = 999;
+      if (referenceDateStr) {
+        const parsedMs = new Date(referenceDateStr).getTime();
+        if (Number.isFinite(parsedMs)) {
+          daysSince = Math.max(0, Math.floor((nowMs - parsedMs) / (1000 * 60 * 60 * 24)));
+        }
+      }
+
+      map[st.id] = {
+        lastLoginDateStr: referenceDateStr ? referenceDateStr.slice(0, 10) : 'لم يسجل دخولاً بعد',
+        daysSinceLogin: daysSince,
+        isOverThreshold:
+          (st.accountStatus || 'نشط') === 'نشط' && daysSince > inactivityThresholdDays,
+      };
+    });
+
+    return map;
+  }, [students, sessions, inactivityThresholdDays]);
+
+  const inactiveStudentsOver3Days = useMemo(() => {
+    return students
+      .filter((st) => studentInactivityMap[st.id]?.isOverThreshold)
+      .sort(
+        (a, b) =>
+          (studentInactivityMap[b.id]?.daysSinceLogin || 0) -
+          (studentInactivityMap[a.id]?.daysSinceLogin || 0)
+      );
+  }, [students, studentInactivityMap]);
+
+  const buildStudentInactivityWhatsAppMessage = (st: Student, idx = 0) => {
+    const info = studentInactivityMap[st.id];
+    const daysLabel =
+      info && info.daysSinceLogin < 900 ? String(info.daysSinceLogin) : `أكثر من ${inactivityThresholdDays}`;
+    const studentCode = st.code || `IQ-${st.id.replace(/\D/g, '') || String(101 + idx)}`;
+    const body = inactivityCustomTemplate
+      .replace(/\{studentName\}/g, st.name)
+      .replace(/\{guardianName\}/g, st.guardianName || 'ولي الأمر')
+      .replace(/\{days\}/g, daysLabel)
+      .replace(/\{surahName\}/g, st.currentStop.surahName)
+      .replace(/\{ayah\}/g, String(st.currentStop.ayah))
+      .replace(/\{circle\}/g, st.circle);
+
+    return `${settings.whatsappHeader}\n\n${body}\n\n🔑 بيانات الدخول السريع لبوابة الطالب:\n- كود الطالب: *${studentCode}*\n- الرمز السري (PIN): *${st.guardianPin || '123456'}*\n- موعد التذكير المجدول: *${inactivityScheduleTime}*\n\n${settings.whatsappFooter}`;
+  };
+
+  const handleScheduleAllInactiveReminders = () => {
+    if (inactiveStudentsOver3Days.length === 0) {
+      showToast('جميع الطلاب النشطين سجلوا دخولهم خلال آخر 3 أيام والحمد لله ✓', 'info');
+      return;
+    }
+    const nowIso = new Date().toISOString();
+    const nextLog = { ...scheduledReminderLog };
+    inactiveStudentsOver3Days.forEach((st) => {
+      nextLog[st.id] = {
+        scheduledAt: nowIso,
+        sentAt: nextLog[st.id]?.sentAt,
+        status: nextLog[st.id]?.sentAt ? 'تم الإرسال عبر واتساب' : 'مجدول تلقائياً',
+      };
+    });
+    setScheduledReminderLog(nextLog);
+    setInactivityAutoScheduleEnabled(true);
+    setActiveSequentialBatchIndex(0);
+    showToast(
+      `⏰ تمت جدولة تذكير واتساب التلقائي لعدد (${inactiveStudentsOver3Days.length}) طلاب لم يسجلوا دخولاً منذ أكثر من ${inactivityThresholdDays} أيام (الموعد اليومي: ${inactivityScheduleTime}) ✓`,
+      'success'
+    );
+  };
+
+  const handleMarkStudentInactivityReminderSent = (st: Student) => {
+    const nowIso = new Date().toISOString();
+    setScheduledReminderLog((prev) => ({
+      ...prev,
+      [st.id]: {
+        scheduledAt: prev[st.id]?.scheduledAt || nowIso,
+        sentAt: nowIso,
+        status: 'تم الإرسال عبر واتساب',
+      },
+    }));
+    updateStudent(st.id, {
+      lastWhatsAppInactivityReminderAt: nowIso,
+    });
+    showToast(`💬 تم فتح محادثة واتساب وتسجيل إرسال التذكير للطالب (${st.name}) ✓`, 'success');
+  };
+
   // Smart Student ID Card + Payment Receipt + Milestone Bisharah + Unified Mushaf Modal State
   const [studentIdCardOpen, setStudentIdCardOpen] = useState(false);
   const [bisharahModalOpen, setBisharahModalOpen] = useState(false);
@@ -301,7 +473,16 @@ export const StudentsView: React.FC = () => {
       const matchTeacher = !teacherFilter || stTeacherName === teacherFilter;
       const stStatus = st.accountStatus || 'نشط';
       const matchStatus = statusFilter === 'all' || stStatus === statusFilter;
-      return matchSearch && matchLevel && matchCircle && matchTeacher && matchStatus;
+      const matchInactivity =
+        !onlyInactiveOver3DaysFilter || Boolean(studentInactivityMap[st.id]?.isOverThreshold);
+      return (
+        matchSearch &&
+        matchLevel &&
+        matchCircle &&
+        matchTeacher &&
+        matchStatus &&
+        matchInactivity
+      );
     });
   }, [
     students,
@@ -312,6 +493,8 @@ export const StudentsView: React.FC = () => {
     circleFilter,
     teacherFilter,
     statusFilter,
+    onlyInactiveOver3DaysFilter,
+    studentInactivityMap,
   ]);
 
   const activeStudent = useMemo(() => {
@@ -551,6 +734,24 @@ export const StudentsView: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {/* WhatsApp Auto-Reminder Scheduler Toggle Button (> 3 Days No Login) */}
+          <button
+            type="button"
+            onClick={() => setShowInactivityScheduler((prev) => !prev)}
+            className={`flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-extrabold border transition-colors cursor-pointer shrink-0 ${
+              showInactivityScheduler
+                ? 'bg-[#c59b27] text-[#14281d] border-[#c59b27] shadow-xs'
+                : 'bg-emerald-50 dark:bg-emerald-950/50 text-[#145a3a] dark:text-[#dfbd69] border-[#c59b27]/60 hover:bg-emerald-100'
+            }`}
+            title="جدولة تذكير تلقائي عبر واتساب للطلاب الذين لم يسجلوا دخولاً منذ أكثر من 3 أيام"
+          >
+            <Phone className="w-3.5 h-3.5 text-emerald-600 dark:text-[#dfbd69]" />
+            <span>⏰ جدولة تذكير واتساب (+{inactivityThresholdDays} أيام)</span>
+            <span className="px-1.5 py-0.5 rounded-full bg-[#145a3a] text-[#dfbd69] text-[10px] font-mono font-bold">
+              {inactiveStudentsOver3Days.length}
+            </span>
+          </button>
+
           {canManageStudents && (
             <button
               type="button"
@@ -699,6 +900,301 @@ export const StudentsView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* ⏰ لوحة جدولة التذكير التلقائي عبر واتساب للطلاب الذين لم يسجلوا دخولاً منذ أكثر من 3 أيام */}
+      {showInactivityScheduler && (
+        <div
+          id="whatsapp-inactivity-scheduler-panel"
+          className="rounded-3xl bg-white dark:bg-[#12231a] p-5 border-2 border-[#c59b27] shadow-md space-y-4"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-neutral-100 dark:border-emerald-900/60">
+            <div className="flex items-start gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-[#145a3a] text-[#dfbd69] flex items-center justify-center shrink-0 shadow-xs">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-sm sm:text-base font-extrabold text-[#145a3a] dark:text-[#dfbd69]">
+                    ⏰ جدولة تذكير تلقائي عبر واتساب للطلاب المتغيبين عن تسجيل الدخول (+{inactivityThresholdDays} أيام)
+                  </h3>
+                  <span
+                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                      inactivityAutoScheduleEnabled
+                        ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+                        : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+                    }`}
+                  >
+                    {inactivityAutoScheduleEnabled
+                      ? `✓ الجدولة التلقائية مفعّلة يومياً (${inactivityScheduleTime})`
+                      : '⏸️ الجدولة التلقائية متوقفة'}
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                  يقوم النظام برصد الطلاب النشطين الذين لم يسجلوا دخولاً لبوابة الطالب أو لم يُسجل لهم حضور منذ أكثر من {inactivityThresholdDays} أيام وتجهيز جدول رسائل التذكير عبر واتساب مع كود الدخول وموضع الحفظ.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setOnlyInactiveOver3DaysFilter((p) => !p)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold cursor-pointer border transition ${
+                  onlyInactiveOver3DaysFilter
+                    ? 'bg-[#145a3a] text-[#dfbd69] border-[#c59b27]'
+                    : 'bg-[#fcfaf2] dark:bg-[#0b1711] text-neutral-700 dark:text-neutral-200 border-neutral-200 dark:border-emerald-900'
+                }`}
+              >
+                {onlyInactiveOver3DaysFilter
+                  ? '✓ عرض المنقطعين فقط في القائمة'
+                  : `تصفية القائمة للمنقطعين (${inactiveStudentsOver3Days.length})`}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowInactivityScheduler(false)}
+                className="px-3 py-1.5 rounded-xl bg-neutral-100 dark:bg-emerald-950 text-xs font-bold cursor-pointer"
+              >
+                إغلاق ✕
+              </button>
+            </div>
+          </div>
+
+          {/* Schedule Controls & Message Template */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 bg-[#fcfaf2] dark:bg-[#0b1711] p-4 rounded-2xl border border-[#c59b27]/40">
+            <div className="lg:col-span-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-extrabold text-[#14281d] dark:text-white flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={inactivityAutoScheduleEnabled}
+                    onChange={(e) => setInactivityAutoScheduleEnabled(e.target.checked)}
+                    className="w-4 h-4 accent-[#145a3a] rounded cursor-pointer"
+                  />
+                  <span>تفعيل التذكير التلقائي المجدول يومياً</span>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-neutral-600 dark:text-neutral-300 mb-1">
+                    عتبة عدم تسجيل الدخول (بالأيام):
+                  </label>
+                  <select
+                    value={inactivityThresholdDays}
+                    onChange={(e) => setInactivityThresholdDays(Number(e.target.value) || 3)}
+                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 dark:border-emerald-800 bg-white dark:bg-[#12231a] text-xs font-bold"
+                  >
+                    <option value={2}>أكثر من يومين (2 أيام)</option>
+                    <option value={3}>أكثر من 3 أيام (الافتراضي)</option>
+                    <option value={5}>أكثر من 5 أيام</option>
+                    <option value={7}>أكثر من 7 أيام (أسبوع)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-neutral-600 dark:text-neutral-300 mb-1">
+                    وقت إرسال التذكير اليومي:
+                  </label>
+                  <input
+                    type="time"
+                    value={inactivityScheduleTime}
+                    onChange={(e) => setInactivityScheduleTime(e.target.value || '18:00')}
+                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 dark:border-emerald-800 bg-white dark:bg-[#12231a] text-xs font-bold font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={handleScheduleAllInactiveReminders}
+                  className="flex-1 py-2.5 px-3.5 rounded-xl bg-[#145a3a] hover:bg-[#0f452c] text-[#dfbd69] text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer shadow-xs transition"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>
+                    جدولة تذكير واتساب للجميع ({inactiveStudentsOver3Days.length} طالب)
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div className="lg:col-span-7 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-extrabold text-[#145a3a] dark:text-[#dfbd69]">
+                  قالب رسالة التذكير التلقائية عبر واتساب (يدعم المتغيرات: {'{studentName}'}، {'{days}'}، {'{surahName}'}، {'{ayah}'}):
+                </label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setInactivityCustomTemplate(
+                      'السلام عليكم ورحمة الله وبركاته، ولي أمر الطالب *{studentName}* حفظه الله، نود تذكيركم بلطف بأنه مضى *{days} أيام* منذ آخر تسجيل دخول ومتابعة للطالب في بوابة أكاديمية الإمام (توقف الحفظ الحالي: سورة *{surahName}* آية *{ayah}*). نسعد بدخول الطالب اليوم لمراجعة ورده القرآني وتثبيت الحفظ.'
+                    )
+                  }
+                  className="text-[10px] font-bold text-neutral-500 hover:text-[#145a3a] cursor-pointer"
+                >
+                  استعادة النص الافتراضي
+                </button>
+              </div>
+              <textarea
+                rows={3}
+                value={inactivityCustomTemplate}
+                onChange={(e) => setInactivityCustomTemplate(e.target.value)}
+                className="w-full p-3 rounded-xl border border-neutral-300 dark:border-emerald-800 bg-white dark:bg-[#12231a] text-xs font-semibold leading-relaxed"
+              />
+            </div>
+          </div>
+
+          {/* Sequential Batch Queue Bar + Student Cards (> 3 Days without login) */}
+          {inactiveStudentsOver3Days.length === 0 ? (
+            <div className="p-4 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-500/30 text-center text-xs font-bold text-emerald-800 dark:text-emerald-200">
+              ✓ ممتاز! لا يوجد أي طالب نشط متأخر عن تسجيل الدخول لأكثر من {inactivityThresholdDays} أيام حالياً.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* Quick Sequential Sender Helper Bar */}
+              {(() => {
+                const safeIdx = Math.min(
+                  activeSequentialBatchIndex,
+                  Math.max(0, inactiveStudentsOver3Days.length - 1)
+                );
+                const currentTargetStudent = inactiveStudentsOver3Days[safeIdx];
+                const currentTargetInfo = currentTargetStudent
+                  ? studentInactivityMap[currentTargetStudent.id]
+                  : null;
+                return (
+                  currentTargetStudent && (
+                    <div className="p-3 rounded-2xl bg-gradient-to-l from-[#145a3a] to-[#0f452c] text-white flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5 text-xs">
+                        <span className="px-2.5 py-1 rounded-xl bg-black/25 text-[#dfbd69] font-mono font-extrabold">
+                          طابور الإرسال السريع ({safeIdx + 1} / {inactiveStudentsOver3Days.length})
+                        </span>
+                        <div>
+                          <span className="font-extrabold text-[#dfbd69]">
+                            {currentTargetStudent.name}
+                          </span>{' '}
+                          <span className="text-emerald-100 text-[11px]">
+                            (آخر دخول: {currentTargetInfo?.lastLoginDateStr} • منذ{' '}
+                            {currentTargetInfo && currentTargetInfo.daysSinceLogin < 900
+                              ? `${currentTargetInfo.daysSinceLogin} يوم`
+                              : `+${inactivityThresholdDays} أيام`}
+                            )
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <a
+                          href={buildWhatsAppUrl(
+                            currentTargetStudent.whatsappPhone,
+                            buildStudentInactivityWhatsAppMessage(currentTargetStudent, safeIdx)
+                          )}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => {
+                            handleMarkStudentInactivityReminderSent(currentTargetStudent);
+                            if (safeIdx + 1 < inactiveStudentsOver3Days.length) {
+                              setActiveSequentialBatchIndex(safeIdx + 1);
+                            }
+                          }}
+                          className="px-3.5 py-1.5 rounded-xl bg-[#c59b27] hover:bg-[#b58c1e] text-[#14281d] text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-xs"
+                        >
+                          <Phone className="w-3.5 h-3.5" />
+                          <span>💬 إرسال التذكير عبر واتساب والانتقال للتالي</span>
+                        </a>
+                      </div>
+                    </div>
+                  )
+                );
+              })()}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-72 overflow-y-auto pr-1">
+                {inactiveStudentsOver3Days.map((st, i) => {
+                  const info = studentInactivityMap[st.id];
+                  const logEntry = scheduledReminderLog[st.id];
+                  const waMessage = buildStudentInactivityWhatsAppMessage(st, i);
+                  return (
+                    <div
+                      key={st.id}
+                      className="p-3.5 rounded-2xl bg-[#f6f7f2] dark:bg-[#0b1711] border border-neutral-200 dark:border-emerald-900/60 flex flex-col justify-between gap-2.5 text-xs"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="font-extrabold text-[#14281d] dark:text-white truncate">
+                            {st.name}
+                          </div>
+                          <div className="text-[11px] text-neutral-500 truncate">
+                            {st.circle} • سورة {st.currentStop.surahName} ({st.currentStop.ayah})
+                          </div>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-lg bg-amber-500/20 text-amber-800 dark:text-amber-300 text-[10px] font-mono font-extrabold shrink-0">
+                          {info && info.daysSinceLogin < 900
+                            ? `منذ ${info.daysSinceLogin} يوم`
+                            : `+${inactivityThresholdDays} أيام`}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] text-neutral-500">
+                        <span>آخر نشاط: {info?.lastLoginDateStr}</span>
+                        {logEntry ? (
+                          <span
+                            className={`px-2 py-0.5 rounded-full font-extrabold ${
+                              logEntry.status === 'تم الإرسال عبر واتساب'
+                                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                                : 'bg-[#c59b27]/20 text-[#145a3a] dark:text-[#dfbd69]'
+                            }`}
+                          >
+                            {logEntry.status} ({inactivityScheduleTime})
+                          </span>
+                        ) : (
+                          <span className="text-amber-600 dark:text-amber-400 font-bold">
+                            بانتظار الجدولة
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5 pt-1 border-t border-neutral-200/70 dark:border-emerald-900/40">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nowIso = new Date().toISOString();
+                            setScheduledReminderLog((prev) => ({
+                              ...prev,
+                              [st.id]: {
+                                scheduledAt: nowIso,
+                                sentAt: prev[st.id]?.sentAt,
+                                status: 'مجدول تلقائياً',
+                              },
+                            }));
+                            showToast(
+                              `⏰ تمت جدولة تذكير واتساب التلقائي للطالب (${st.name}) الساعة ${inactivityScheduleTime} ✓`,
+                              'info'
+                            );
+                          }}
+                          className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-[#12231a] border border-neutral-200 dark:border-emerald-800 text-[#145a3a] dark:text-[#dfbd69] text-[10px] font-extrabold cursor-pointer"
+                        >
+                          ⏰ جدولة ({inactivityScheduleTime})
+                        </button>
+
+                        <a
+                          href={buildWhatsAppUrl(st.whatsappPhone, waMessage)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => handleMarkStudentInactivityReminderSent(st)}
+                          className="flex-1 py-1.5 px-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-extrabold flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <Phone className="w-3 h-3" />
+                          <span>إرسال التذكير واتساب</span>
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 4. طابور القبول وطلبات الالتحاق للطلاب الجدد (New Student Admission Queue) */}
       {showAdmissionDrawer && (
@@ -882,7 +1378,7 @@ export const StudentsView: React.FC = () => {
                           .join('')}
                       </div>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-sm font-extrabold truncate">
                             {st.name}
                           </span>
@@ -895,6 +1391,18 @@ export const StudentsView: React.FC = () => {
                           >
                             {studentCode}
                           </span>
+                          {studentInactivityMap[st.id]?.isOverThreshold && (
+                            <span
+                              className={`px-1.5 py-0.5 rounded-md text-[9px] font-extrabold ${
+                                isSelected
+                                  ? 'bg-amber-400 text-[#14281d]'
+                                  : 'bg-amber-500/20 text-amber-800 dark:text-amber-300'
+                              }`}
+                              title={`لم يسجل دخولاً منذ أكثر من ${inactivityThresholdDays} أيام`}
+                            >
+                              ⏰ لم يسجل دخول (+{inactivityThresholdDays} أيام)
+                            </span>
+                          )}
                         </div>
                         <div
                           className={`text-xs truncate mt-0.5 ${
@@ -932,7 +1440,24 @@ export const StudentsView: React.FC = () => {
                       </button>
 
                       {isCardMenuOpen && (
-                        <div className="absolute left-0 top-full mt-1 w-56 rounded-2xl bg-white dark:bg-[#12231a] border border-neutral-200 dark:border-emerald-800 shadow-xl py-1.5 z-40 text-xs font-bold text-neutral-700 dark:text-neutral-200">
+                        <div className="absolute left-0 top-full mt-1 w-60 rounded-2xl bg-white dark:bg-[#12231a] border border-neutral-200 dark:border-emerald-800 shadow-xl py-1.5 z-40 text-xs font-bold text-neutral-700 dark:text-neutral-200">
+                          <a
+                            href={buildWhatsAppUrl(
+                              st.whatsappPhone,
+                              buildStudentInactivityWhatsAppMessage(st, idx)
+                            )}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => {
+                              setActiveDropdownId(null);
+                              handleMarkStudentInactivityReminderSent(st);
+                            }}
+                            className="w-full px-3.5 py-2 text-right hover:bg-neutral-100 dark:hover:bg-[#0b1711] flex items-center gap-2 text-amber-700 dark:text-[#dfbd69] cursor-pointer"
+                          >
+                            <Calendar className="w-3.5 h-3.5 text-[#c59b27]" />
+                            <span>⏰ تذكير واتساب لعدم الدخول (+3 أيام)</span>
+                          </a>
+
                           <a
                             href={buildWhatsAppUrl(
                               st.whatsappPhone,

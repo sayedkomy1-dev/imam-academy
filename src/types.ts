@@ -753,6 +753,7 @@ export interface Student {
   archiveReason?: string;
   lastStudentLoginAt?: string;
   lastLoginDate?: string;
+  lastWhatsAppInactivityReminderAt?: string;
   level: StudentLevel;
   circle: string;
   plan: StudentPlan;

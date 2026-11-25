@@ -7,7 +7,25 @@ import { GoogleGenAI, Type } from '@google/genai';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PORT = Number(process.env.PORT) || 3000;
+function resolveServerPort(): number {
+  const portArgIdx = process.argv.indexOf('--port');
+  if (portArgIdx !== -1 && process.argv[portArgIdx + 1]) {
+    const cliPort = Number(process.argv[portArgIdx + 1]);
+    if (Number.isFinite(cliPort) && cliPort > 0) return cliPort;
+  }
+  const envPort = Number(process.env.PORT);
+  const nginxPort = Number(process.env.NGINX_PORT);
+  if (
+    Number.isFinite(envPort) &&
+    envPort > 0 &&
+    (!nginxPort || envPort !== nginxPort)
+  ) {
+    return envPort;
+  }
+  return Number(process.env.DEFAULT_APP_PORT) || 3000;
+}
+
+const PORT = resolveServerPort();
 
 function parseAudioDataUrl(
   audioDataUrl?: string,
@@ -107,7 +125,7 @@ async function startServer() {
         .then((r) => r.text?.trim() || '')
         .catch(() => '');
 
-      const evaluationPrompt = `أنت شيخ مقرئ مجاز بالقرآن الكريم وخبير في علم التجويد واللحن الجلي واللحن الخفي برواية (${riwayah}).
+      const evaluationPrompt = `أنت شيخ مقرئ مجاز بالقرآن الكريم وخبير في علم التجويد ومخارج الحروف وصفاتها واللحن الجلي واللحن الخفي برواية (${riwayah}).
 قم بتحليل هذا المقطع الصوتي المسجل لتسميع الطالب (${studentName}) في محور (${axisLabel}) من سورة (${surahName})، الآيات من (${fromAyah}) إلى (${toAyah})، مدة التسجيل تقريباً (${durationSeconds} ثانية).
 
 النص القرآني المرجعي المتوقع للتسميع:
@@ -115,20 +133,21 @@ async function startServer() {
 ${versesText || `سورة ${surahName} من الآية ${fromAyah} إلى الآية ${toAyah}`}
 """
 
-المطلوب منك تقديم تقييم قرآني وتجويدي دقيق ومفصل للمعلم يشمل:
-1. تفريغ ما سمعته من تلاوة الطالب (transcription). إذا كان الصوت عبارة عن نغمة اختبارية أو غير واضح، اذكر ذلك بأمانة علمية وقدم تحليلاً إرشادياً لأبرز مواضع اللحن الجلي وأحكام التجويد التي يجب على المعلم مراعاتها في هذه الآيات من سورة ${surahName}.
+المطلوب منك تقديم تقييم قرآني وتجويدي دقيق ومفصل للمعلم يركز بوضوح على **مخارج الحروف وصفاتها** و**سلامة التلاوة** ويشمل:
+1. تفريغ ما سمعته من تلاوة الطالب (transcription). إذا كان الصوت عبارة عن نغمة اختبارية أو غير واضح، اذكر ذلك بأمانة علمية وقدم تحليلاً إرشادياً لأبرز مخارج الحروف الدقيقة ومواضع اللحن الجلي وأحكام التجويد التي يجب على المعلم مراعاتها في هذه الآيات من سورة ${surahName}.
 2. الدرجة الكلية المقترحة من 100 (overallScore) والتقدير المقترح (recommendedGrade) ومرتبة التلاوة (recitationPace: تحقيق / تدوير / حدر).
 3. تفصيل درجات المحاور الصوتية الأربعة من 100:
-   - حفظ وضبط الحركات واللحن الجلي (lahnJaliScore)
+   - سلامة التلاوة والحركات واللحن الجلي (lahnJaliScore)
    - أحكام النون الساكنة والتنوين والغنن (ghunnahScore)
    - أحكام المدود ومقاديرها (maddScore)
    - مخارج الحروف وصفاتها والوقف والابتداء (makharijScore)
-4. رصد مواضع "اللحن الجلي" (lahnJaliFindings): مثل إبدال حرف بحرف، تغيير حركة إعرابية أو بنائية، نقص أو زيادة كلمة، أو تردد وتوقف. لكل موضع حدد الكلمة القرآنية، رقم الآية، نوع الخطأ ('حفظ' | 'تشكيل' | 'نسيان آية' | 'تردد' | 'تلقين')، ما وقع فيه القارئ أو ما يُحذر منه، والصواب، ودرجة الخطورة ('مؤثر في المعنى' | 'خطأ إعرابي/حركة' | 'نقص أو زيادة' | 'تردد يحتاج تثبيت').
-5. تقييم "أحكام التجويد واللحن الخفي" (tajweedFindings): استخرج أهم الأحكام التجويدية في الآيات المتلوة (مثل الغنن، الإخفاء، الإدغام، الإظهار، الإقلاب، المد المتصل/المنفصل/العارض، القلقلة، التفخيم والترقيق، مخارج الحروف) وحدد حالتها ('متقن' | 'يحتاج ضبط') مع توجيه عملي دقيق للمعلم والطالب.
-6. نقاط الإجادة والتميز (strengths) والتوجيه التربوي المقترح لولي الأمر (actionableAdviceForParent).`;
+4. تقييم مفصل لـ "مخارج الحروف وصفاتها" (makharijFindings) عبر المخارج الخمسة الرئيسية (الجوف، الحلق، اللسان، الشفتان، الخيشوم): لكل موضع حدد الحرف أو الكلمة القرآنية (letterOrWord)، رقم الآية (ayahNumber)، المخرج العام أو الخاص (makhrajRegion: 'الجوف' | 'الحلق' | 'اللسان' | 'الشفتان' | 'الخيشوم')، الصفة اللازمة أو العارضة (sifah: مثل التفخيم/الترقيق، القلقلة، الهمس، الجهر، الاستعلاء، الإطباق، الصفير، التفشي)، حالة النطق ('متقن' | 'يحتاج ضبط')، وتدريب عملي لضبط المخرج (articulationTip).
+5. رصد مواضع "سلامة التلاوة واللحن الجلي" (lahnJaliFindings): مثل إبدال حرف بحرف، تغيير حركة إعرابية أو بنائية، نقص أو زيادة كلمة، أو تردد وتوقف. لكل موضع حدد الكلمة القرآنية، رقم الآية، نوع الخطأ ('حفظ' | 'تشكيل' | 'نسيان آية' | 'تردد' | 'تلقين')، ما وقع فيه القارئ أو ما يُحذر منه، والصواب، ودرجة الخطورة ('مؤثر في المعنى' | 'خطأ إعرابي/حركة' | 'نقص أو زيادة' | 'تردد يحتاج تثبيت').
+6. تقييم "أحكام التجويد واللحن الخفي" (tajweedFindings): استخرج أهم الأحكام التجويدية في الآيات المتلوة (مثل الغنن، الإخفاء، الإدغام، الإظهار، الإقلاب، المد المتصل/المنفصل/العارض، القلقلة، التفخيم والترقيق) وحدد حالتها ('متقن' | 'يحتاج ضبط') مع توجيه عملي دقيق للمعلم والطالب.
+7. نقاط الإجادة والتميز (strengths) والتوجيه التربوي المقترح لولي الأمر (actionableAdviceForParent).`;
 
       const analysisResponse = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: 'gemini-4-hydrogen',
         contents: {
           parts: [audioPart, { text: evaluationPrompt }],
         },
@@ -156,7 +175,7 @@ ${versesText || `سورة ${surahName} من الآية ${fromAyah} إلى الآ
               },
               summaryFeedback: {
                 type: Type.STRING,
-                description: 'ملخص تقييمي شامل للمعلم حول جودة التلاوة والأحكام',
+                description: 'ملخص تقييمي شامل للمعلم حول مخارج الحروف وسلامة التلاوة والأحكام',
               },
               subScores: {
                 type: Type.OBJECT,
@@ -172,6 +191,34 @@ ${versesText || `سورة ${surahName} من الآية ${fromAyah} إلى الآ
                   'maddScore',
                   'makharijScore',
                 ],
+              },
+              makharijFindings: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    letterOrWord: { type: Type.STRING },
+                    ayahNumber: { type: Type.INTEGER },
+                    makhrajRegion: {
+                      type: Type.STRING,
+                      enum: ['الجوف', 'الحلق', 'اللسان', 'الشفتان', 'الخيشوم'],
+                    },
+                    sifah: { type: Type.STRING },
+                    status: {
+                      type: Type.STRING,
+                      enum: ['متقن', 'يحتاج ضبط'],
+                    },
+                    articulationTip: { type: Type.STRING },
+                  },
+                  required: [
+                    'letterOrWord',
+                    'ayahNumber',
+                    'makhrajRegion',
+                    'sifah',
+                    'status',
+                    'articulationTip',
+                  ],
+                },
               },
               lahnJaliFindings: {
                 type: Type.ARRAY,
@@ -246,6 +293,7 @@ ${versesText || `سورة ${surahName} من الآية ${fromAyah} إلى الآ
               'transcription',
               'summaryFeedback',
               'subScores',
+              'makharijFindings',
               'lahnJaliFindings',
               'tajweedFindings',
               'strengths',
@@ -265,7 +313,7 @@ ${versesText || `سورة ${surahName} من الآية ${fromAyah} إلى الآ
 
       res.json({
         source: 'gemini-server',
-        model: 'gemini-3.8-flash',
+        model: 'gemini-4-hydrogen',
         analyzedAt: new Date().toISOString(),
         result: parsedResult,
       });
@@ -325,7 +373,7 @@ ${recentErrorsSummary ? `ملاحظات وأخطاء الطالب السابقة
 4. رسالة واتساب تشجيعية وتربوية جاهزة لإرسالها لولي الأمر مع المقطع الصوتي.`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: 'gemini-4-hydrogen',
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
@@ -363,7 +411,7 @@ ${recentErrorsSummary ? `ملاحظات وأخطاء الطالب السابقة
       const parsed = JSON.parse(response.text || '{}');
       res.json({
         source: 'gemini-server',
-        model: 'gemini-3.8-flash',
+        model: 'gemini-4-hydrogen',
         generatedAt: new Date().toISOString(),
         result: parsed,
       });
@@ -476,7 +524,7 @@ ${recentErrorsSummary ? `ملاحظات وأخطاء الطالب السابقة
       parts.push({ text: prompt });
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: 'gemini-4-hydrogen',
         contents: { parts },
         config: {
           responseMimeType: 'application/json',
@@ -530,7 +578,7 @@ ${recentErrorsSummary ? `ملاحظات وأخطاء الطالب السابقة
       const parsedResult = JSON.parse(response.text || '{}');
       res.json({
         source: 'gemini-server',
-        model: 'gemini-3.8-flash',
+        model: 'gemini-4-hydrogen',
         convertedAt: new Date().toISOString(),
         result: parsedResult,
       });
@@ -549,16 +597,20 @@ ${recentErrorsSummary ? `ملاحظات وأخطاء الطالب السابقة
   app.use('/assets', express.static(path.join(__dirname, 'assets')));
   app.use('/assets', express.static(path.join(__dirname, 'dist', 'assets')));
 
+  let viteServer: { close: () => Promise<void> } | null = null;
+
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
         hmr: false,
+        ws: false,
         watch: null,
       },
       appType: 'spa',
     });
+    viteServer = vite;
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(__dirname, 'dist');
@@ -568,9 +620,26 @@ ${recentErrorsSummary ? `ملاحظات وأخطاء الطالب السابقة
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const httpServer = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Al-Imam Academy Server running on http://0.0.0.0:${PORT}`);
   });
+
+  const shutdown = () => {
+    httpServer.close(() => {
+      if (viteServer) {
+        void viteServer.close().finally(() => process.exit(0));
+      } else {
+        process.exit(0);
+      }
+    });
+    setTimeout(() => process.exit(0), 2000).unref();
+  };
+
+  process.once('SIGTERM', shutdown);
+  process.once('SIGINT', shutdown);
 }
 
-startServer();
+startServer().catch((err) => {
+  console.error('Failed to start Al-Imam Academy Server:', err);
+  process.exit(1);
+});

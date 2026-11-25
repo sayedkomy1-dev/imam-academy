@@ -567,30 +567,59 @@ export async function syncAcademySnapshotToFirestore(params: {
     .toLowerCase()
     .slice(0, 160);
 
+  const getUtf8ByteLength = (str: string): number => {
+    try {
+      return new TextEncoder().encode(str).length;
+    } catch {
+      return str.length * 2;
+    }
+  };
+
+  const MAX_FIRESTORE_PAYLOAD_BYTES = 920_000;
   let serializedPayload = '';
   if (params.backupPayload) {
     try {
       const rawJson = JSON.stringify(params.backupPayload);
-      if (rawJson.length <= 940000) {
+      if (getUtf8ByteLength(rawJson) <= MAX_FIRESTORE_PAYLOAD_BYTES) {
         serializedPayload = rawJson;
       } else {
-        // Trim heavy audio data URLs if needed to fit within Firestore 1MB document limit
+        // Trim heavy audio data URLs first to fit within Firestore 1MB document limit
+        const slimSessions: Record<string, unknown>[] = Array.isArray(params.backupPayload.sessions)
+          ? (params.backupPayload.sessions as Record<string, unknown>[]).map(
+              (ses): Record<string, unknown> => ({
+                ...ses,
+                voiceNoteDataUrl: undefined,
+                memorizationAudioDataUrl: undefined,
+                teacherVoiceNotes: undefined,
+              })
+            )
+          : [];
         const slimPayload = {
           ...params.backupPayload,
-          sessions: Array.isArray(params.backupPayload.sessions)
-            ? (params.backupPayload.sessions as Record<string, unknown>[]).map(
-                (ses) => ({
-                  ...ses,
-                  voiceNoteDataUrl: undefined,
-                  memorizationAudioDataUrl: undefined,
-                  teacherVoiceNotes: undefined,
-                })
-              )
-            : [],
+          sessions: slimSessions,
         };
         const slimJson = JSON.stringify(slimPayload);
-        if (slimJson.length <= 940000) {
+        if (getUtf8ByteLength(slimJson) <= MAX_FIRESTORE_PAYLOAD_BYTES) {
           serializedPayload = slimJson;
+        } else {
+          // Keep all students, circles, settings and the most recent sessions that fit safely under 920KB UTF-8
+          const sortedRecent = [...slimSessions].sort((a, b) =>
+            String(b.date || b.createdAt || '').localeCompare(
+              String(a.date || a.createdAt || '')
+            )
+          );
+          let limit = Math.min(sortedRecent.length, 750);
+          while (limit >= 100) {
+            const candidate = JSON.stringify({
+              ...slimPayload,
+              sessions: sortedRecent.slice(0, limit),
+            });
+            if (getUtf8ByteLength(candidate) <= MAX_FIRESTORE_PAYLOAD_BYTES) {
+              serializedPayload = candidate;
+              break;
+            }
+            limit -= 100;
+          }
         }
       }
     } catch {

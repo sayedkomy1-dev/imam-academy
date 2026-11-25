@@ -736,14 +736,61 @@ export function normalizePortableBackupPayload(
     ? (obj.sessions as Record<string, unknown>[])
     : [];
 
-  // Deduplicate rapid double-click sessions (same student, same date, same summary within 5 seconds)
-  const normalizedSessions: SessionRecord[] = [];
+  // Normalize and filter deleted tombstones first
+  const candidateSessions: SessionRecord[] = [];
   for (const sRaw of rawSessions) {
     const sId = String(sRaw.id || '');
     if (deletedSessionIds.has(sId)) continue;
     const norm = normalizePortableSession(sRaw);
     if (deletedStudentIds.has(norm.studentId)) continue;
-    normalizedSessions.push(norm);
+    candidateSessions.push(norm);
+  }
+
+  // Sort chronologically to collapse rapid double-click duplicates deterministically
+  candidateSessions.sort((a, b) =>
+    a.createdAt !== b.createdAt
+      ? a.createdAt.localeCompare(b.createdAt)
+      : a.id.localeCompare(b.id)
+  );
+
+  const buildSessionDedupSig = (s: SessionRecord): string =>
+    JSON.stringify([
+      s.studentId,
+      s.date,
+      s.status,
+      s.newMemorization
+        ? [s.newMemorization.surahId, s.newMemorization.fromAyah, s.newMemorization.toAyah]
+        : null,
+      s.nearReview
+        ? [s.nearReview.surahId, s.nearReview.fromAyah, s.nearReview.toAyah]
+        : null,
+      s.farReview
+        ? [s.farReview.surahId, s.farReview.fromAyah, s.farReview.toAyah]
+        : null,
+      s.juzReview?.items?.map((j) => `${j.juzNumber}:${j.scope}`) || [],
+      s.surahReview?.surahNames || [],
+      s.previousEvaluation || {},
+      (s.parentNotes || '').trim(),
+    ]);
+
+  const normalizedSessions: SessionRecord[] = [];
+  const lastBySig = new Map<string, { idx: number; ts: number }>();
+
+  for (const ses of candidateSessions) {
+    const sig = buildSessionDedupSig(ses);
+    const ts = Date.parse(ses.createdAt || ses.date || '') || 0;
+    const prevEntry = lastBySig.get(sig);
+    if (prevEntry && ts > 0 && prevEntry.ts > 0 && Math.abs(ts - prevEntry.ts) <= 120_000) {
+      const existing = normalizedSessions[prevEntry.idx];
+      // Keep the richer session (more errors), otherwise the newer one
+      if ((ses.errors?.length || 0) >= (existing.errors?.length || 0)) {
+        normalizedSessions[prevEntry.idx] = ses;
+      }
+      prevEntry.ts = ts;
+    } else {
+      lastBySig.set(sig, { idx: normalizedSessions.length, ts });
+      normalizedSessions.push(ses);
+    }
   }
 
   // Group sessions by studentId
@@ -773,6 +820,11 @@ export function normalizePortableBackupPayload(
     ).trim() || fallbackSettings.officialWhatsappPhone;
 
   const rawWeeklyGoals = (rawSettingsObj.weeklyGoals || {}) as Record<string, number>;
+  const rawAttendanceGoal = Number(rawWeeklyGoals.attendanceTarget);
+  const fallbackAttendanceGoal =
+    Number(rawWeeklyGoals.attendance) > 20
+      ? Number(rawWeeklyGoals.attendance)
+      : fallbackSettings.weeklyGoals.attendanceTarget;
 
   const mergedSettings: AcademySettings = {
     ...fallbackSettings,
@@ -801,9 +853,7 @@ export function normalizePortableBackupPayload(
       sessionsTarget:
         Number(rawWeeklyGoals.sessionsTarget || rawWeeklyGoals.sessions) ||
         fallbackSettings.weeklyGoals.sessionsTarget,
-      attendanceTarget:
-        Number(rawWeeklyGoals.attendanceTarget || rawWeeklyGoals.attendance) ||
-        fallbackSettings.weeklyGoals.attendanceTarget,
+      attendanceTarget: rawAttendanceGoal > 0 ? rawAttendanceGoal : fallbackAttendanceGoal,
     },
   };
 

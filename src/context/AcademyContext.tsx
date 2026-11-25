@@ -854,13 +854,6 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [activeTab, setActiveTab] = useState<ActiveTab>(
     () => (restoredContext?.activeTab as ActiveTab) || 'dashboard'
   );
-  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(() => {
-    const restoredId = restoredContext?.selectedStudentId;
-    if (restoredId && !DEFAULT_SEED_STUDENT_IDS.has(restoredId)) {
-      return restoredId;
-    }
-    return null;
-  });
   const [toastMessage, setToastMessage] = useState<{
     text: string;
     type: 'success' | 'error' | 'info' | 'warning';
@@ -911,13 +904,30 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
   }, []);
 
-  // Load initial state from sanitized store while stripping all default seed records
+  // Load initial state from sanitized store while automatically migrating in the real students dataset once
   const loadInitialState = () => {
     const SANITIZED_MIGRATION_FLAG = 'wlq_sanitized_v13_migrated_2026';
+    const REAL_STUDENTS_MIGRATION_FLAG = 'wlq_real_students_loaded_2026_11_24_v1';
     try {
-      const migratedAlready = localStorage.getItem(SANITIZED_MIGRATION_FLAG) === 'true';
+      const migratedSanitized = localStorage.getItem(SANITIZED_MIGRATION_FLAG) === 'true';
+      const loadedRealBackupAlready =
+        localStorage.getItem(REAL_STUDENTS_MIGRATION_FLAG) === 'true';
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (migratedAlready && raw) {
+
+      let existingClean: {
+        students: Student[];
+        sessions: SessionRecord[];
+        circles: CircleGroup[];
+        exams: ExamRecord[];
+        ijazahs: IjazahRecord[];
+        tasks: TaskItem[];
+        settings: AcademySettings;
+        boardStrokes: Record<string, SmartBoardStroke[]>;
+        teacherRatings: TeacherRatingRecord[];
+        homeSubmissions: HomePracticeSubmission[];
+      } | null = null;
+
+      if (migratedSanitized && raw) {
         const parsed = JSON.parse(raw);
         if (parsed && Array.isArray(parsed.students)) {
           const normalized = normalizePortableBackupPayload(
@@ -927,7 +937,7 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
             getCurrentMonthKey()
           );
           if (normalized) {
-            return {
+            existingClean = {
               students: normalized.students.filter(
                 (st) => !DEFAULT_SEED_STUDENT_IDS.has(st.id)
               ),
@@ -970,25 +980,78 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
           }
         }
       }
+
+      if (loadedRealBackupAlready && existingClean) {
+        return existingClean;
+      }
+
+      // First-time upgrade to the real students backup: merge real students/sessions/circles with any existing user records
       localStorage.setItem(SANITIZED_MIGRATION_FLAG, 'true');
+      localStorage.setItem(REAL_STUDENTS_MIGRATION_FLAG, 'true');
+
+      if (existingClean) {
+        const studentMap = new Map<string, Student>();
+        INITIAL_STUDENTS.forEach((st) => studentMap.set(st.id, st));
+        existingClean.students.forEach((st) => studentMap.set(st.id, st));
+
+        const sessionMap = new Map<string, SessionRecord>();
+        INITIAL_SESSIONS.forEach((ses) => sessionMap.set(ses.id, ses));
+        existingClean.sessions.forEach((ses) => sessionMap.set(ses.id, ses));
+
+        const circleMap = new Map<string, CircleGroup>();
+        INITIAL_CIRCLES.forEach((c) => circleMap.set(c.id, c));
+        existingClean.circles.forEach((c) => circleMap.set(c.id, c));
+
+        return {
+          ...existingClean,
+          students: Array.from(studentMap.values()),
+          sessions: Array.from(sessionMap.values()),
+          circles: Array.from(circleMap.values()),
+          settings: {
+            ...existingClean.settings,
+            teacherName:
+              existingClean.settings.teacherName &&
+              existingClean.settings.teacherName !== 'المعلم المشرف'
+                ? existingClean.settings.teacherName
+                : INITIAL_SETTINGS.teacherName,
+            officialWhatsappPhone:
+              existingClean.settings.officialWhatsappPhone &&
+              existingClean.settings.officialWhatsappPhone !== '01000000000'
+                ? existingClean.settings.officialWhatsappPhone
+                : INITIAL_SETTINGS.officialWhatsappPhone,
+            weeklyGoals: INITIAL_SETTINGS.weeklyGoals,
+          },
+        };
+      }
     } catch {
-      // fallback to clean empty state
+      // fallback to real backup dataset
     }
     return {
-      students: [] as Student[],
-      sessions: [] as SessionRecord[],
-      circles: [] as CircleGroup[],
-      exams: [] as ExamRecord[],
-      ijazahs: [] as IjazahRecord[],
-      tasks: [] as TaskItem[],
+      students: INITIAL_STUDENTS,
+      sessions: INITIAL_SESSIONS,
+      circles: INITIAL_CIRCLES,
+      exams: INITIAL_EXAMS,
+      ijazahs: INITIAL_IJAZAHS,
+      tasks: INITIAL_TASKS,
       settings: INITIAL_SETTINGS,
       boardStrokes: {} as Record<string, SmartBoardStroke[]>,
-      teacherRatings: [] as TeacherRatingRecord[],
-      homeSubmissions: [] as HomePracticeSubmission[],
+      teacherRatings: INITIAL_TEACHER_RATINGS,
+      homeSubmissions: INITIAL_HOME_SUBMISSIONS,
     };
   };
 
   const initial = loadInitialState();
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(() => {
+    const restoredId = restoredContext?.selectedStudentId;
+    if (
+      restoredId &&
+      !DEFAULT_SEED_STUDENT_IDS.has(restoredId) &&
+      initial.students.some((s) => s.id === restoredId)
+    ) {
+      return restoredId;
+    }
+    return initial.students[0]?.id || null;
+  });
   const [students, setStudents] = useState<Student[]>(
     initial.students.map((st) => ({
       ...st,
@@ -1047,33 +1110,33 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const defaultMasterOwners: TeacherAccessRecord[] = [
       {
         id: 'tch-owner-sayed1',
-        name: 'الشيخ سيد الكومي — مالك الأكاديمية (١)',
+        name: 'الشيخ السيد الكومي — مالك الأكاديمية (١)',
         email: 'sayedkomy1@gmail.com',
         roleTitle: '👑 مالك الأكاديمية (Super Admin / Owner)',
         staffRole: 'owner',
         status: 'active',
         authProvider: 'google',
-        whatsappPhone: '201000000001',
+        whatsappPhone: '201095782616',
         specialization: 'المالك العام والمشرف الأعلى للحلقات القرآنية بالسند المتصل',
         lastSyncAt: getLocalDateString(0),
         lastActiveAt: `${getLocalDateString(0)} 10:00`,
-        sessionsRecordedCount: 0,
-        assignedCirclesCount: 0,
+        sessionsRecordedCount: INITIAL_SESSIONS.length,
+        assignedCirclesCount: INITIAL_CIRCLES.length,
       },
       {
         id: 'tch-owner-sayed2',
-        name: 'الشيخ سيد الكومي — مالك الأكاديمية (٢)',
+        name: 'الشيخ السيد الكومي — مالك الأكاديمية (٢)',
         email: 'sayedkomy2@gmail.com',
         roleTitle: '👑 مالك الأكاديمية (Super Admin / Owner)',
         staffRole: 'owner',
         status: 'active',
         authProvider: 'google',
-        whatsappPhone: '201000000002',
+        whatsappPhone: '201095782616',
         specialization: 'المالك العام والمشرف الأعلى للحلقات القرآنية بالسند المتصل',
         lastSyncAt: getLocalDateString(0),
         lastActiveAt: `${getLocalDateString(0)} 11:30`,
         sessionsRecordedCount: 0,
-        assignedCirclesCount: 0,
+        assignedCirclesCount: INITIAL_CIRCLES.length,
       },
     ];
 
@@ -6190,9 +6253,12 @@ export const AcademyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setPeerCompetitions([]);
     setPublicBookmarks([]);
     setPublicVisitors([]);
-    setSelectedStudentId(null);
+    setSelectedStudentId(INITIAL_STUDENTS[0]?.id || null);
     void triggerCloudSyncNow(false);
-    showToast('تم تفريغ وإعادة ضبط النظام بنجاح', 'info');
+    showToast(
+      `تم استعادة بيانات الطلاب الحقيقيين (${INITIAL_STUDENTS.length} طالباً و ${INITIAL_SESSIONS.length} حصة) بنجاح`,
+      'success'
+    );
   };
 
   const importFullBackup = (data: unknown): boolean => {

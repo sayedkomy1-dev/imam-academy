@@ -89,7 +89,8 @@ function githubPagesDeployHelperPlugin() {
   };
 }
 
-export default defineConfig(() => {
+export default defineConfig(({ command }) => {
+  const isBuild = command === 'build';
   return {
     base: '/',
     build: {
@@ -110,8 +111,10 @@ export default defineConfig(() => {
     plugins: [
       react(),
       tailwindcss(),
-      githubPagesDeployHelperPlugin(),
-      VitePWA({
+      ...(isBuild ? [githubPagesDeployHelperPlugin()] : []),
+      ...(isBuild
+        ? [
+            VitePWA({
         registerType: 'autoUpdate',
         includeAssets: [
           'sw-push.js',
@@ -233,6 +236,8 @@ export default defineConfig(() => {
           type: 'module',
         },
       }),
+          ]
+        : []),
     ],
     resolve: {
       alias: {
@@ -243,6 +248,7 @@ export default defineConfig(() => {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
+      ws: process.env.DISABLE_HMR === 'true' ? false : undefined,
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },

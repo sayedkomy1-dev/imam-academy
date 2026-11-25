@@ -265,6 +265,7 @@ export const SessionEngineView: React.FC = () => {
     studentAudioBlobs,
     loadStudentAudioBlobs,
     saveStudentAudioBlob,
+    deleteStudentAudioBlob,
     saveStudentRecitationAudioClip,
     deleteStudentRecitationAudioClip,
     selectedStudentId,
@@ -589,23 +590,37 @@ export const SessionEngineView: React.FC = () => {
   const [isTeacherAudioPlaying, setIsTeacherAudioPlaying] =
     useState<boolean>(false);
   const [idbBlobObjectUrls, setIdbBlobObjectUrls] = useState<Record<string, string>>({});
+  const [idbTargetAxis, setIdbTargetAxis] = useState<
+    'actualRecitation' | 'newMemorization' | 'nearReview' | 'farReview'
+  >('actualRecitation');
+  const [idbCustomNote, setIdbCustomNote] = useState<string>('');
+  const [idbPlaybackSpeed, setIdbPlaybackSpeed] = useState<number>(1);
+  const [idbReviewedMap, setIdbReviewedMap] = useState<
+    Record<string, { grade: 'ممتاز' | 'جيد جداً' | 'بحاجة لمراجعة'; time: string }>
+  >({});
 
   useEffect(() => {
     if (!currentStudent?.id) return;
-    loadStudentAudioBlobs(currentStudent.id)
-      .then((records) => {
-        const nextUrls: Record<string, string> = {};
-        records.forEach((rec) => {
+    loadStudentAudioBlobs(currentStudent.id).catch(() => {});
+  }, [currentStudent?.id]);
+
+  useEffect(() => {
+    if (!currentStudent?.id) return;
+    const records = studentAudioBlobs[currentStudent.id] || [];
+    setIdbBlobObjectUrls((prev) => {
+      const nextUrls = { ...prev };
+      records.forEach((rec) => {
+        if (!nextUrls[rec.id]) {
           if (rec.blob instanceof Blob) {
             nextUrls[rec.id] = URL.createObjectURL(rec.blob);
           } else if (rec.dataUrl) {
             nextUrls[rec.id] = rec.dataUrl;
           }
-        });
-        setIdbBlobObjectUrls((prev) => ({ ...prev, ...nextUrls }));
-      })
-      .catch(() => {});
-  }, [currentStudent?.id, loadStudentAudioBlobs]);
+        }
+      });
+      return nextUrls;
+    });
+  }, [currentStudent?.id, studentAudioBlobs]);
 
   const [keyboardShortcutsEnabled, setKeyboardShortcutsEnabled] =
     useState<boolean>(true);
@@ -801,6 +816,8 @@ export const SessionEngineView: React.FC = () => {
   const [activeAxisMicRecording, setActiveAxisMicRecording] =
     useState<RecitationAxisKey | null>(null);
   const [axisMicSeconds, setAxisMicSeconds] = useState<number>(0);
+  const [axisMicPaused, setAxisMicPaused] = useState<boolean>(false);
+  const [axisMicLevel, setAxisMicLevel] = useState<number>(0);
   const [juzReviewRecordedAudioUrl, setJuzReviewRecordedAudioUrl] = useState<
     string | undefined
   >(undefined);
@@ -817,6 +834,10 @@ export const SessionEngineView: React.FC = () => {
   const [showWhatsAppSummaryPreview, setShowWhatsAppSummaryPreview] =
     useState<boolean>(false);
   const axisMediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const axisStreamRef = useRef<MediaStream | null>(null);
+  const axisAudioCtxRef = useRef<AudioContext | null>(null);
+  const axisMeterTimerRef = useRef<number | null>(null);
+  const axisDiscardRef = useRef<boolean>(false);
   const axisTimerRef = useRef<number | null>(null);
   const axisStartTimestampRef = useRef<number>(0);
   const axisSimulatedFallbackRef = useRef<boolean>(false);
@@ -828,8 +849,26 @@ export const SessionEngineView: React.FC = () => {
     toAyah?: number;
     percentage?: number;
     grade?: GradeType;
+    customNote?: string;
     onSavedToAxis?: (url: string, dur: number) => void;
   } | null>(null);
+
+  const cleanupAxisAudioMeter = () => {
+    if (axisMeterTimerRef.current) {
+      window.clearInterval(axisMeterTimerRef.current);
+      axisMeterTimerRef.current = null;
+    }
+    if (axisAudioCtxRef.current) {
+      axisAudioCtxRef.current.close().catch(() => {});
+      axisAudioCtxRef.current = null;
+    }
+    if (axisStreamRef.current) {
+      axisStreamRef.current.getTracks().forEach((t) => t.stop());
+      axisStreamRef.current = null;
+    }
+    setAxisMicLevel(0);
+    setAxisMicPaused(false);
+  };
 
   const studentRecitationClips = useMemo<StudentRecitationAudioClip[]>(() => {
     if (!currentStudent) return [];
@@ -844,10 +883,17 @@ export const SessionEngineView: React.FC = () => {
   const finalizeAxisMicClip = async (blob: Blob, dataUrl: string, durationSec: number) => {
     const meta = axisPendingCallbackRef.current;
     axisPendingCallbackRef.current = null;
+    cleanupAxisAudioMeter();
     if (!currentStudent || !meta) return;
 
     const clampedDur = Math.max(1, durationSec);
     meta.onSavedToAxis?.(dataUrl, clampedDur);
+
+    const noteText =
+      meta.customNote?.trim() ||
+      `مقطع تسميع مسجل بالميكروفون في (${meta.axisLabel}) — سورة ${meta.surahName} (${
+        meta.fromAyah || 1
+      }-${meta.toAyah || meta.fromAyah || 1})`;
 
     const savedClip = await saveStudentRecitationAudioClip(currentStudent.id, {
       studentName: currentStudent.name,
@@ -861,15 +907,77 @@ export const SessionEngineView: React.FC = () => {
       durationSeconds: clampedDur,
       grade: meta.grade,
       percentage: meta.percentage,
-      notes: `مقطع تسميع مسجل بالميكروفون في (${meta.axisLabel}) — سورة ${meta.surahName}`,
+      notes: noteText,
       blob,
     });
 
+    await loadStudentAudioBlobs(currentStudent.id).catch(() => {});
+    setIdbCustomNote('');
+
     showToast(
-      `🎙️ تم تسجيل مقطع التسميع (${clampedDur} ثانية) وتخزين الرابط في حالة الطالب (${currentStudent.name}) بنجاح ✓`,
+      `🎙️ تم تسجيل مقطع التسميع (${clampedDur} ثانية) وحفظه مؤقتاً في IndexedDB للمراجعة ✓`,
       'success'
     );
     return savedClip;
+  };
+
+  const handlePauseResumeAxisMic = () => {
+    if (!activeAxisMicRecording) return;
+    triggerHaptic(10);
+    const rec = axisMediaRecorderRef.current;
+    if (!axisMicPaused) {
+      if (rec && rec.state === 'recording') {
+        try {
+          rec.pause();
+        } catch {
+          // ignore
+        }
+      }
+      if (axisTimerRef.current) {
+        window.clearInterval(axisTimerRef.current);
+        axisTimerRef.current = null;
+      }
+      setAxisMicPaused(true);
+      setAxisMicLevel(0);
+      showToast('⏸️ تم إيقاف التسجيل الصوتي مؤقتاً', 'info');
+    } else {
+      if (rec && rec.state === 'paused') {
+        try {
+          rec.resume();
+        } catch {
+          // ignore
+        }
+      }
+      if (axisTimerRef.current) window.clearInterval(axisTimerRef.current);
+      axisTimerRef.current = window.setInterval(() => {
+        setAxisMicSeconds((prev) => prev + 1);
+      }, 1000);
+      setAxisMicPaused(false);
+      showToast('▶️ تم استئناف تسجيل التسميع بالميكروفون', 'info');
+    }
+  };
+
+  const handleCancelAxisMic = () => {
+    if (!activeAxisMicRecording) return;
+    triggerHaptic(12);
+    axisDiscardRef.current = true;
+    axisPendingCallbackRef.current = null;
+    if (axisTimerRef.current) {
+      window.clearInterval(axisTimerRef.current);
+      axisTimerRef.current = null;
+    }
+    setActiveAxisMicRecording(null);
+    setAxisMicSeconds(0);
+    if (axisMediaRecorderRef.current && axisMediaRecorderRef.current.state !== 'inactive') {
+      try {
+        axisMediaRecorderRef.current.stop();
+      } catch {
+        // ignore
+      }
+    }
+    axisMediaRecorderRef.current = null;
+    cleanupAxisAudioMeter();
+    showToast('🗑️ تم إلغاء التسجيل الصوتي الحالي دون حفظ', 'info');
   };
 
   const handleToggleAxisMicrophoneClip = async (params: {
@@ -880,11 +988,12 @@ export const SessionEngineView: React.FC = () => {
     toAyah?: number;
     percentage?: number;
     grade?: GradeType;
+    customNote?: string;
     onSavedToAxis?: (url: string, dur: number) => void;
   }) => {
     triggerHaptic(15);
 
-    // If currently recording on any axis, stop and save
+    // If currently recording on any axis, stop and save to IndexedDB
     if (activeAxisMicRecording) {
       if (axisTimerRef.current) {
         window.clearInterval(axisTimerRef.current);
@@ -892,8 +1001,8 @@ export const SessionEngineView: React.FC = () => {
       }
       const elapsedSec = Math.max(
         2,
-        Math.round((Date.now() - axisStartTimestampRef.current) / 1000) ||
-          axisMicSeconds ||
+        axisMicSeconds ||
+          Math.round((Date.now() - axisStartTimestampRef.current) / 1000) ||
           3
       );
       setActiveAxisMicRecording(null);
@@ -915,10 +1024,12 @@ export const SessionEngineView: React.FC = () => {
     }
 
     // Start new microphone recording for this axis + Auto-trigger SmartFocus
+    axisDiscardRef.current = false;
     activateSmartFocusOnRecitationStart(`بدء تسميع (${params.axisLabel}) بالميكروفون`);
     axisPendingCallbackRef.current = params;
     setActiveAxisMicRecording(params.axisKey);
     setAxisMicSeconds(0);
+    setAxisMicPaused(false);
     axisStartTimestampRef.current = Date.now();
     if (axisTimerRef.current) window.clearInterval(axisTimerRef.current);
     axisTimerRef.current = window.setInterval(() => {
@@ -928,6 +1039,34 @@ export const SessionEngineView: React.FC = () => {
     if (navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined') {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        axisStreamRef.current = stream;
+
+        // Live microphone level meter using Web Audio API AnalyserNode
+        try {
+          const AudioCtx =
+            window.AudioContext ||
+            (window as unknown as { webkitAudioContext?: typeof AudioContext })
+              .webkitAudioContext;
+          if (AudioCtx) {
+            const audioCtx = new AudioCtx();
+            const source = audioCtx.createMediaStreamSource(stream);
+            const analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 256;
+            source.connect(analyser);
+            axisAudioCtxRef.current = audioCtx;
+            const dataArr = new Uint8Array(analyser.frequencyBinCount);
+            axisMeterTimerRef.current = window.setInterval(() => {
+              analyser.getByteFrequencyData(dataArr);
+              const avg =
+                dataArr.reduce((acc, val) => acc + val, 0) /
+                Math.max(1, dataArr.length);
+              setAxisMicLevel(Math.min(100, Math.round((avg / 128) * 100)));
+            }, 120);
+          }
+        } catch {
+          // ignore audio meter errors
+        }
+
         const recorder = new MediaRecorder(stream);
         const chunks: BlobPart[] = [];
         recorder.ondataavailable = (e) => {
@@ -935,9 +1074,16 @@ export const SessionEngineView: React.FC = () => {
         };
         recorder.onstop = () => {
           stream.getTracks().forEach((t) => t.stop());
+          if (axisDiscardRef.current) {
+            axisDiscardRef.current = false;
+            cleanupAxisAudioMeter();
+            return;
+          }
           const elapsedSec = Math.max(
             2,
-            Math.round((Date.now() - axisStartTimestampRef.current) / 1000) || 3
+            axisMicSeconds ||
+              Math.round((Date.now() - axisStartTimestampRef.current) / 1000) ||
+              3
           );
           if (chunks.length === 0) {
             const fallback = generateTeacherFallbackWavDataUrl(elapsedSec);
@@ -959,9 +1105,9 @@ export const SessionEngineView: React.FC = () => {
         };
         axisSimulatedFallbackRef.current = false;
         axisMediaRecorderRef.current = recorder;
-        recorder.start();
+        recorder.start(250);
         showToast(
-          `🎙️ بدأ تسجيل الميكروفون لمحور (${params.axisLabel})... اضغط إيقاف لحفظ الرابط في حالة الطالب`,
+          `🎙️ بدأ تسجيل الميكروفون لمحور (${params.axisLabel})... اضغط إيقاف لحفظه مؤقتاً في IndexedDB للمراجعة`,
           'info'
         );
         return;
@@ -972,8 +1118,11 @@ export const SessionEngineView: React.FC = () => {
 
     axisSimulatedFallbackRef.current = true;
     axisMediaRecorderRef.current = null;
+    axisMeterTimerRef.current = window.setInterval(() => {
+      setAxisMicLevel(Math.floor(30 + Math.random() * 55));
+    }, 180);
     showToast(
-      `🎙️ جاري تسجيل مقطع (${params.axisLabel}) وحفظه في حالة الطالب... اضغط إيقاف عند الانتهاء`,
+      `🎙️ جاري تسجيل مقطع (${params.axisLabel}) وحفظه مؤقتاً في IndexedDB... اضغط إيقاف عند الانتهاء`,
       'info'
     );
   };
@@ -8159,14 +8308,539 @@ export const SessionEngineView: React.FC = () => {
             </div>
           </div>
 
-          {/* ✨ أداة تحليل المقطع الصوتي المسجل عبر Gemini API لتقييم أحكام التجويد واللحن الجلي */}
+          {/* ✨ أداة تحليل المقطع الصوتي المسجل عبر Gemini API (Multimodal) لتقييم مخارج الحروف وسلامة التلاوة — متاحة دائماً بعد وحدة IndexedDB */}
+            </>
+          )}
+
+          {/* 🎙️ وحدة تسجيل مقاطع التسميع صوتياً بميكروفون المتصفح وحفظها مؤقتاً في IndexedDB للمراجعة (تظهر دائماً في الوضع المبسط والمتقدم) */}
+          {currentStudent && (
+            <div
+              id="indexeddb-recitation-mic-recorder-card"
+              className="rounded-2xl bg-white dark:bg-[#12231a] border-2 border-[#c59b27]/70 p-4 sm:p-5 shadow-xs space-y-4"
+            >
+              {(() => {
+                const currentIdbRecords = studentAudioBlobs[currentStudent.id] || [];
+                const totalSizeKb = Math.max(
+                  0,
+                  Math.round(
+                    currentIdbRecords.reduce((sum, r) => sum + (r.sizeBytes || 0), 0) /
+                      1024
+                  )
+                );
+
+                const axisConfigMap = {
+                  actualRecitation: {
+                    label: 'التسميع الفعلي',
+                    state: actualRecitation,
+                    setState: setActualRecitation,
+                    pct: sectionPercentages.actualRecitation || 94,
+                  },
+                  newMemorization: {
+                    label: 'الحفظ الجديد',
+                    state: newMem,
+                    setState: setNewMem,
+                    pct: sectionPercentages.newMemorization || 95,
+                  },
+                  nearReview: {
+                    label: 'المراجعة القريبة',
+                    state: nearRev,
+                    setState: setNearRev,
+                    pct: sectionPercentages.nearReview || 90,
+                  },
+                  farReview: {
+                    label: 'المراجعة البعيدة',
+                    state: farRev,
+                    setState: setFarRev,
+                    pct: sectionPercentages.farReview || 88,
+                  },
+                } as const;
+
+                const selectedCfg = axisConfigMap[idbTargetAxis];
+                const surahMeta =
+                  SURAHS.find((s) => s.id === selectedCfg.state.surahId) || SURAHS[0];
+                const fromAyah = selectedCfg.state.isFullSurah
+                  ? 1
+                  : selectedCfg.state.fromAyah;
+                const toAyah = selectedCfg.state.isFullSurah
+                  ? surahMeta.ayahs
+                  : selectedCfg.state.toAyah;
+                const isRecordingNow = Boolean(activeAxisMicRecording);
+
+                return (
+                  <>
+                    <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-neutral-100 dark:border-emerald-900/50">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-xs ${
+                            isRecordingNow
+                              ? 'bg-red-600 text-white animate-pulse'
+                              : 'bg-[#145a3a] text-[#dfbd69]'
+                          }`}
+                        >
+                          <Mic className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-sm sm:text-base font-extrabold text-[#14281d] dark:text-white">
+                              🎙️ تسجيل مقاطع التسميع صوتياً بالميكروفون وحفظها مؤقتاً في IndexedDB للمراجعة
+                            </h3>
+                            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-[#145a3a] dark:text-[#dfbd69] text-[11px] font-mono font-bold">
+                              IndexedDB ({currentIdbRecords.length} مقاطع • {totalSizeKb} KB)
+                            </span>
+                          </div>
+                          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                            سجّل تلاوة الطالب ({currentStudent.name}) مباشرة عبر ميكروفون المتصفح ليتم حفظ المقطع كـ Blob مؤقت في قاعدة بيانات المتصفح (IndexedDB) للاستماع والمراجعة وتحليل مخارج الحروف عبر Gemini.
+                          </p>
+                        </div>
+                      </div>
+
+                      {currentIdbRecords.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            for (const rec of currentIdbRecords) {
+                              await deleteStudentAudioBlob(currentStudent.id, rec.id);
+                            }
+                            showToast(
+                              '🧹 تم مسح جميع مقاطع التسميع المؤقتة من IndexedDB بعد المراجعة',
+                              'info'
+                            );
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-red-50 dark:bg-red-950/40 hover:bg-red-100 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800/50 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer transition"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>مسح المؤقت من IndexedDB ({currentIdbRecords.length})</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Recorder Controls Row */}
+                    <div className="p-4 rounded-2xl bg-[#fcfaf2] dark:bg-[#0b1711] border border-[#c59b27]/40 space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                        {/* Axis Selector */}
+                        <div className="md:col-span-4">
+                          <label className="block text-xs font-bold mb-1 text-[#145a3a] dark:text-[#dfbd69]">
+                            محور التسميع المراد تسجيله:
+                          </label>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {(
+                              [
+                                { id: 'actualRecitation', label: 'التسميع الفعلي' },
+                                { id: 'newMemorization', label: 'الحفظ الجديد' },
+                                { id: 'nearReview', label: 'المراجعة القريبة' },
+                                { id: 'farReview', label: 'المراجعة البعيدة' },
+                              ] as const
+                            ).map((ax) => (
+                              <button
+                                key={ax.id}
+                                type="button"
+                                disabled={isRecordingNow}
+                                onClick={() => setIdbTargetAxis(ax.id)}
+                                className={`py-2 px-2.5 rounded-xl text-xs font-extrabold border text-center cursor-pointer transition ${
+                                  idbTargetAxis === ax.id
+                                    ? 'bg-[#145a3a] text-[#dfbd69] border-[#c59b27] shadow-2xs'
+                                    : 'bg-white dark:bg-[#12231a] text-neutral-600 dark:text-neutral-300 border-neutral-200 dark:border-emerald-900'
+                                }`}
+                              >
+                                {ax.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Current Surah/Ayah Badge + Optional Quick Note */}
+                        <div className="md:col-span-4">
+                          <label className="block text-xs font-bold mb-1">
+                            الموضع الحالي وملاحظة المقطع (اختياري):
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-[#145a3a] dark:text-[#dfbd69] text-xs font-extrabold whitespace-nowrap">
+                              سورة {selectedCfg.state.surahName} ({fromAyah}-{toAyah})
+                            </span>
+                            <input
+                              type="text"
+                              value={idbCustomNote}
+                              onChange={(e) => setIdbCustomNote(e.target.value)}
+                              placeholder="ملاحظة سريعة للمراجعة..."
+                              className="w-full px-3 py-2 rounded-xl border border-neutral-300 dark:border-emerald-900 bg-white dark:bg-[#12231a] text-xs font-semibold"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Start / Pause / Stop & Save to IndexedDB Buttons */}
+                        <div className="md:col-span-4 flex flex-wrap items-center justify-end gap-2">
+                          {!isRecordingNow ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleToggleAxisMicrophoneClip({
+                                  axisKey: idbTargetAxis,
+                                  axisLabel: selectedCfg.label,
+                                  surahName: selectedCfg.state.surahName,
+                                  fromAyah,
+                                  toAyah,
+                                  percentage: selectedCfg.pct,
+                                  grade: selectedCfg.state.grade,
+                                  customNote: idbCustomNote,
+                                  onSavedToAxis: (url, dur) => {
+                                    selectedCfg.setState((prev) => ({
+                                      ...prev,
+                                      recordedAudioUrl: url,
+                                      recordedAudioDurationSec: dur,
+                                      recordedAt: new Date().toISOString(),
+                                    }));
+                                  },
+                                })
+                              }
+                              className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-[#145a3a] hover:bg-[#0f452c] text-[#dfbd69] text-xs font-black flex items-center justify-center gap-2 cursor-pointer shadow-xs transition"
+                            >
+                              <Mic className="w-4 h-4" />
+                              <span>🎙️ بدء تسجيل التسميع بالميكروفون</span>
+                            </button>
+                          ) : (
+                            <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto">
+                              <button
+                                type="button"
+                                onClick={handlePauseResumeAxisMic}
+                                className="px-3 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-[#14281d] text-xs font-black flex items-center gap-1 cursor-pointer transition"
+                              >
+                                {axisMicPaused ? (
+                                  <>
+                                    <Play className="w-3.5 h-3.5" />
+                                    <span>استئناف</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Pause className="w-3.5 h-3.5" />
+                                    <span>إيقاف مؤقت</span>
+                                  </>
+                                )}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleToggleAxisMicrophoneClip({
+                                    axisKey: idbTargetAxis,
+                                    axisLabel: selectedCfg.label,
+                                    surahName: selectedCfg.state.surahName,
+                                    fromAyah,
+                                    toAyah,
+                                    percentage: selectedCfg.pct,
+                                    grade: selectedCfg.state.grade,
+                                    customNote: idbCustomNote,
+                                  })
+                                }
+                                className="px-3.5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-xs animate-pulse"
+                              >
+                                <MicOff className="w-3.5 h-3.5" />
+                                <span>
+                                  ⏹️ إيقاف وحفظ في IndexedDB ({formatTimerMMSS(axisMicSeconds)})
+                                </span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={handleCancelAxisMic}
+                                className="p-2.5 rounded-xl bg-neutral-200 dark:bg-neutral-800 hover:bg-neutral-300 text-neutral-700 dark:text-neutral-200 text-xs font-bold cursor-pointer"
+                                title="إلغاء التسجيل دون حفظ"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Live Audio Level Meter Bar during recording */}
+                      {isRecordingNow && (
+                        <div className="p-3 rounded-xl bg-white dark:bg-[#12231a] border border-red-400/50 flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-red-600 animate-ping" />
+                            <span className="text-xs font-extrabold text-red-600 dark:text-red-400">
+                              {axisMicPaused
+                                ? '⏸️ التسجيل متوقف مؤقتاً'
+                                : `🔴 جاري التسجيل من الميكروفون (${selectedCfg.label} — سورة ${selectedCfg.state.surahName})`}
+                            </span>
+                            <span className="font-mono text-xs font-black px-2 py-0.5 rounded bg-red-500/10 text-red-700 dark:text-red-300">
+                              {formatTimerMMSS(axisMicSeconds)}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 flex-1 max-w-xs">
+                            <span className="text-[10px] font-bold text-neutral-500 whitespace-nowrap">
+                              مستوى الصوت:
+                            </span>
+                            <div className="flex-1 h-2.5 rounded-full bg-neutral-200 dark:bg-emerald-950 overflow-hidden">
+                              <div
+                                className="h-full bg-gradient-to-l from-red-500 via-amber-500 to-emerald-500 transition-all duration-100"
+                                style={{ width: `${Math.max(8, axisMicLevel)}%` }}
+                              />
+                            </div>
+                            <span className="font-mono text-[10px] font-bold text-neutral-600 dark:text-neutral-300 w-8 text-left">
+                              {axisMicLevel}%
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Temporary IndexedDB Clips Review List */}
+                    <div className="space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-xs font-extrabold text-[#145a3a] dark:text-[#dfbd69] flex items-center gap-1.5">
+                          <span>
+                            🎧 مقاطع التسميع المحفوظة مؤقتاً في IndexedDB للمراجعة والتحليل الصوتي ({currentIdbRecords.length}):
+                          </span>
+                        </div>
+                        {currentIdbRecords.length > 0 && (
+                          <div className="flex items-center gap-1.5 text-[11px]">
+                            <span className="text-neutral-500 font-bold">سرعة التشغيل:</span>
+                            {[0.75, 1, 1.25, 1.5].map((spd) => (
+                              <button
+                                key={spd}
+                                type="button"
+                                onClick={() => {
+                                  setIdbPlaybackSpeed(spd);
+                                  document
+                                    .querySelectorAll<HTMLAudioElement>(
+                                      '.idb-review-audio-player'
+                                    )
+                                    .forEach((el) => {
+                                      el.playbackRate = spd;
+                                    });
+                                }}
+                                className={`px-2 py-0.5 rounded-lg font-mono font-bold cursor-pointer ${
+                                  idbPlaybackSpeed === spd
+                                    ? 'bg-[#145a3a] text-[#dfbd69]'
+                                    : 'bg-[#f6f7f2] dark:bg-[#0b1711] text-neutral-600 dark:text-neutral-300'
+                                }`}
+                              >
+                                {spd}x
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {currentIdbRecords.length === 0 ? (
+                        <div className="p-4 rounded-xl bg-[#f6f7f2]/70 dark:bg-[#0b1711]/60 border border-dashed border-[#c59b27]/40 text-center text-xs text-neutral-500">
+                          لا توجد مقاطع تسميع محفوظة مؤقتاً في IndexedDB لهذا الطالب حالياً — اضغط على «🎙️ بدء تسجيل التسميع بالميكروفون» أعلاه لتسجيل التلاوة ومراجعتها وتحليل مخارج الحروف فوراً.
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-1">
+                          {currentIdbRecords.map((rec) => {
+                            const audioSrc = idbBlobObjectUrls[rec.id] || rec.dataUrl;
+                            const sizeKb = Math.max(
+                              1,
+                              Math.round((rec.sizeBytes || rec.dataUrl?.length || 2048) / 1024)
+                            );
+                            const reviewEntry = idbReviewedMap[rec.id];
+                            const timeLabel = rec.createdAt
+                              ? new Date(rec.createdAt).toLocaleTimeString('ar-EG', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })
+                              : '';
+
+                            return (
+                              <div
+                                key={rec.id}
+                                className="p-3.5 rounded-2xl bg-[#f6f7f2] dark:bg-[#0b1711] border border-neutral-200 dark:border-emerald-900/60 flex flex-col justify-between gap-2.5 shadow-2xs"
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="px-2 py-0.5 rounded-lg bg-[#145a3a] text-[#dfbd69] text-[10px] font-extrabold">
+                                        سورة {rec.surahName} (آية {rec.fromAyah}-{rec.toAyah})
+                                      </span>
+                                      <span className="px-2 py-0.5 rounded-lg bg-amber-500/15 text-[#14281d] dark:text-[#dfbd69] text-[10px] font-mono font-bold">
+                                        ⏱️ {rec.durationSeconds}ث • {sizeKb} KB
+                                      </span>
+                                      {timeLabel && (
+                                        <span className="text-[10px] text-neutral-400 font-mono">
+                                          {timeLabel}
+                                        </span>
+                                      )}
+                                      {reviewEntry && (
+                                        <span
+                                          className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                                            reviewEntry.grade === 'ممتاز'
+                                              ? 'bg-emerald-600 text-white'
+                                              : reviewEntry.grade === 'جيد جداً'
+                                              ? 'bg-amber-500 text-[#14281d]'
+                                              : 'bg-red-600 text-white'
+                                          }`}
+                                        >
+                                          ✓ تمت المراجعة: {reviewEntry.grade}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-[11px] text-neutral-600 dark:text-neutral-300 font-semibold mt-1 truncate">
+                                      {rec.studentNote || `مقطع تسميع لسورة ${rec.surahName}`}
+                                    </p>
+                                  </div>
+
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const triggerClip: StudentRecitationAudioClip = {
+                                          id: rec.id,
+                                          studentId: currentStudent.id,
+                                          sessionDate,
+                                          createdAt: rec.createdAt || new Date().toISOString(),
+                                          axisKey: 'actualRecitation',
+                                          axisLabel: rec.studentNote || 'مقطع تسميع IndexedDB',
+                                          surahName: rec.surahName,
+                                          fromAyah: rec.fromAyah,
+                                          toAyah: rec.toAyah,
+                                          durationSeconds: rec.durationSeconds || 8,
+                                          audioUrl: rec.dataUrl || audioSrc,
+                                        };
+                                        setGeminiTriggerClip(triggerClip);
+                                        document
+                                          .getElementById('gemini-recitation-analyzer-panel')
+                                          ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                      }}
+                                      className="px-2.5 py-1.5 rounded-lg bg-gradient-to-l from-[#c59b27] to-[#dfbd69] hover:brightness-105 text-[#14281d] text-[10px] font-black flex items-center gap-1 cursor-pointer shadow-2xs"
+                                      title="تحليل مخارج الحروف وسلامة التلاوة لهذا المقطع عبر Gemini Multimodal"
+                                    >
+                                      <Sparkles className="w-3.5 h-3.5" />
+                                      <span>تحليل المخارج والتلاوة (Gemini)</span>
+                                    </button>
+                                    <a
+                                      href={audioSrc}
+                                      download={`recitation-${currentStudent.name}-${rec.surahName}-${rec.fromAyah}-${rec.toAyah}.webm`}
+                                      className="p-1.5 rounded-lg bg-white dark:bg-[#12231a] text-[#145a3a] dark:text-[#dfbd69] border border-neutral-200 dark:border-emerald-900"
+                                      title="تنزيل المقطع الصوتي"
+                                    >
+                                      <Download className="w-3.5 h-3.5" />
+                                    </a>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        deleteStudentAudioBlob(currentStudent.id, rec.id)
+                                      }
+                                      className="p-1.5 rounded-lg bg-white dark:bg-[#12231a] text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 border border-neutral-200 dark:border-emerald-900 cursor-pointer"
+                                      title="حذف هذا المقطع من IndexedDB"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <audio
+                                  controls
+                                  src={audioSrc}
+                                  onPlay={(e) => {
+                                    e.currentTarget.playbackRate = idbPlaybackSpeed;
+                                  }}
+                                  className="idb-review-audio-player w-full h-8"
+                                />
+
+                                {/* Quick Teacher Review Evaluation Buttons for this IndexedDB clip */}
+                                <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1.5 border-t border-neutral-200/70 dark:border-emerald-900/40">
+                                  <span className="text-[10px] font-bold text-neutral-500">
+                                    تقييم سريع بعد الاستماع:
+                                  </span>
+                                  <div className="flex flex-wrap items-center gap-1">
+                                    {(
+                                      [
+                                        {
+                                          grade: 'ممتاز',
+                                          cls: 'bg-emerald-600 hover:bg-emerald-700 text-white',
+                                        },
+                                        {
+                                          grade: 'جيد جداً',
+                                          cls: 'bg-amber-500 hover:bg-amber-600 text-[#14281d]',
+                                        },
+                                        {
+                                          grade: 'بحاجة لمراجعة',
+                                          cls: 'bg-red-600 hover:bg-red-700 text-white',
+                                        },
+                                      ] as const
+                                    ).map((btn) => (
+                                      <button
+                                        key={btn.grade}
+                                        type="button"
+                                        onClick={() => {
+                                          setIdbReviewedMap((prev) => ({
+                                            ...prev,
+                                            [rec.id]: {
+                                              grade: btn.grade,
+                                              time: new Date().toLocaleTimeString('ar-EG', {
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                              }),
+                                            },
+                                          }));
+                                          const mappedGrade: GradeType =
+                                            btn.grade === 'بحاجة لمراجعة'
+                                              ? 'جيد'
+                                              : btn.grade;
+                                          setPrevNewGrade(mappedGrade);
+                                          setActualRecitation((prev) => ({
+                                            ...prev,
+                                            grade: mappedGrade,
+                                          }));
+                                          const reviewLine = `🎙️ مراجعة تسجيل التسميع (سورة ${rec.surahName} آية ${rec.fromAyah}-${rec.toAyah}): ${btn.grade}`;
+                                          setParentNotes((prev) =>
+                                            prev ? `${prev}\n${reviewLine}` : reviewLine
+                                          );
+                                          showToast(
+                                            `تم اعتماد تقييم المراجعة الصوتية (${btn.grade}) وإضافته لملاحظات الحصة ✓`,
+                                            'success'
+                                          );
+                                        }}
+                                        className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold cursor-pointer transition ${btn.cls}`}
+                                      >
+                                        {btn.grade}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* ✨ أداة تحليل مقاطع الصوت المسجلة باستخدام Gemini API (Multimodal) لتقييم مخارج الحروف وسلامة التلاوة */}
           {currentStudent && (
             <GeminiRecitationAnalyzerTool
               studentId={currentStudent.id}
               studentName={currentStudent.name}
               riwayah={currentStudent.riwayah || 'حفص عن عاصم'}
               sessionDate={sessionDate}
-              clips={studentRecitationClips}
+              clips={(() => {
+                const idbClipsAsAudioClips: StudentRecitationAudioClip[] = (
+                  studentAudioBlobs[currentStudent.id] || []
+                ).map((rec) => ({
+                  id: rec.id,
+                  studentId: currentStudent.id,
+                  sessionDate: rec.createdAt ? rec.createdAt.slice(0, 10) : sessionDate,
+                  createdAt: rec.createdAt || new Date().toISOString(),
+                  axisKey: 'actualRecitation',
+                  axisLabel: rec.studentNote || 'تسجيل IndexedDB مؤقت',
+                  surahName: rec.surahName,
+                  fromAyah: rec.fromAyah,
+                  toAyah: rec.toAyah,
+                  durationSeconds: rec.durationSeconds || 8,
+                  audioUrl: rec.dataUrl || idbBlobObjectUrls[rec.id] || '',
+                }));
+                const existingIds = new Set(studentRecitationClips.map((c) => c.id));
+                return [
+                  ...idbClipsAsAudioClips.filter((c) => c.audioUrl && !existingIds.has(c.id)),
+                  ...studentRecitationClips,
+                ];
+              })()}
               activeAxisConfig={{
                 axisKey: 'actualRecitation',
                 axisLabel: '١) التسميع الفعلي في الحصة',
@@ -8177,9 +8851,11 @@ export const SessionEngineView: React.FC = () => {
                 errorContext: 'التسميع',
                 recordedAudioUrl:
                   actualRecitation.recordedAudioUrl ||
+                  studentAudioBlobs[currentStudent.id]?.[0]?.dataUrl ||
                   studentRecitationClips[0]?.audioUrl,
                 recordedDurationSec:
                   actualRecitation.recordedAudioDurationSec ||
+                  studentAudioBlobs[currentStudent.id]?.[0]?.durationSeconds ||
                   studentRecitationClips[0]?.durationSeconds,
               }}
               externalTriggerClip={geminiTriggerClip}
@@ -8249,8 +8925,6 @@ export const SessionEngineView: React.FC = () => {
               axisMicSeconds={axisMicSeconds}
               onShowToast={showToast}
             />
-          )}
-            </>
           )}
 
           {/* Section 0: Actual Recitation in Current Session (التسميع الفعلي في الحصة الحالية) */}
